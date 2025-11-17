@@ -283,3 +283,9 @@ body {
   .two-columns { flex-direction:column }
   .two-columns .col { max-height: none }
 }
+
+/* Tabs row small niceties */
+.tabs-row { display:flex; gap:8px; align-items:center; }
+.tab { padding:6px 10px; border-radius:8px; background: rgba(255,255,255,0.02); color:var(--muted); border: 1px solid rgba(255,255,255,0.02); cursor:pointer }
+.tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
+.tab-content { max-height:360px; overflow:auto; padding-right:6px }

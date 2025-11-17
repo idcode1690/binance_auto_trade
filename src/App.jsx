@@ -227,11 +227,15 @@ export default function App() {
 
             <div style={{marginTop:12}}>
               {/* Combined Cross (left) / Orders (right) view */}
-              <div className="two-columns">
-                <div className="col">
-                  <h4 style={{marginTop:0}}>Cross Alerts</h4>
-                  <div className="meta">
-                    {(alerts && alerts.length > 0) ? (
+              <div className="tabbed">
+                <div className="tabs-row" style={{display:'flex',gap:8,marginBottom:8}}>
+                  <button className={"tab" + (activeTab === 'alerts' ? ' active' : '')} onClick={() => setActiveTab('alerts')}>Cross Alerts</button>
+                  <button className={"tab" + (activeTab === 'orders' ? ' active' : '')} onClick={() => setActiveTab('orders')}>Orders / Results</button>
+                </div>
+
+                <div className="tab-content meta">
+                  {activeTab === 'alerts' ? (
+                    (alerts && alerts.length > 0) ? (
                       <ul className="alerts">
                         {alerts.map(a => (
                           <li key={a.id} className="alert-item">
@@ -249,13 +253,9 @@ export default function App() {
                           </li>
                         ))}
                       </ul>
-                    ) : ('No alerts yet.')}
-                  </div>
-                </div>
-                <div className="col">
-                  <h4 style={{marginTop:0}}>Orders / Results</h4>
-                  <div className="meta">
-                    {(orders && orders.length > 0) ? (
+                    ) : ('No alerts yet.')
+                  ) : (
+                    (orders && orders.length > 0) ? (
                       <ul className="orders-list">
                         {orders.map(o => (
                           <li key={o.id} className="alert-item">
@@ -274,8 +274,8 @@ export default function App() {
                           </li>
                         ))}
                       </ul>
-                    ) : ('No orders yet.')}
-                  </div>
+                    ) : ('No orders yet.')
+                  )}
                 </div>
               </div>
             </div>
