@@ -285,7 +285,10 @@ body {
 }
 
 /* Tabs row small niceties */
-.tabs-row { display:flex; gap:8px; align-items:center; }
-.tab { padding:6px 10px; border-radius:8px; background: rgba(255,255,255,0.02); color:var(--muted); border: 1px solid rgba(255,255,255,0.02); cursor:pointer }
-.tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
+.tabs-row { display:flex; gap:0; align-items:center; width:100%; }
+/* Make the two tabs occupy exactly half of the available width each */
+.tabs-row .tab { flex: 1 1 50%; margin: 0; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.02); color: var(--muted); cursor: pointer; text-align: center; font-weight:600 }
+.tabs-row .tab:first-child { border-top-left-radius:8px; border-bottom-left-radius:8px; border-right: none }
+.tabs-row .tab:last-child { border-top-right-radius:8px; border-bottom-right-radius:8px }
+.tabs-row .tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
 .tab-content { max-height:360px; overflow:auto; padding-right:6px }
