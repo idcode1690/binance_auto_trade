@@ -40,6 +40,7 @@ export default function App() {
   const [futuresBalanceStr, setFuturesBalanceStr] = useState(() => {
     try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
   })
+  const [account, setAccount] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
   })
@@ -91,18 +92,21 @@ export default function App() {
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
           const data = await resp.json()
           if (!mounted) return
-          if (data && typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-            try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-            setFuturesBalanceStr(String(data.totalWalletBalance))
-          }
-          if (data && Array.isArray(data.positions) && symbol) {
-            const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-            if (p) {
-              const amt = Number(p.positionAmt) || 0
-              try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-              setHoldingsStr(String(amt))
-            }
-          }
+                if (data) {
+                  setAccount(data)
+                  if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+                    try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+                    setFuturesBalanceStr(String(data.totalWalletBalance))
+                  }
+                  if (Array.isArray(data.positions) && symbol) {
+                    const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+                    if (p) {
+                      const amt = Number(p.positionAmt) || 0
+                      try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+                      setHoldingsStr(String(amt))
+                    }
+                  }
+                }
           // success — stop trying other urls
           return
         } catch (err) {
@@ -166,26 +170,39 @@ export default function App() {
           <div className="sidebar-inner">
             <h3 style={{marginTop:0}}>Futures Account</h3>
             <div className="meta">
-              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>BTC Position</div>
                     <div style={{fontSize:12,color:'var(--muted)'}}>{`Price: ${price || '—'}`}</div>
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
-                    <input className="theme-input" type="number" min={0} step="any" value={holdingsStr} onChange={e=>setHoldingsStr(e.target.value)} onBlur={() => { const v = String(Number(holdingsStr) || 0); setHoldingsStr(v); try { localStorage.setItem('holdings', v) } catch(e){} }} style={{width:100,padding:6,borderRadius:6,textAlign:'right'}} />
-                    <div style={{fontSize:13}}>{value == null ? 'Position Value: —' : `Position Value: ${formatPrice(value)} USDT`}</div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:16,fontWeight:600}}>{
+                      (() => {
+                        const p = account && Array.isArray(account.positions) ? account.positions.find(x => x.symbol === String(symbol).toUpperCase()) : null
+                        const amt = p ? Number(p.positionAmt) : Number(holdingsStr) || 0
+                        return amt === 0 ? '0' : amt
+                      })()
+                    }</div>
+                    <div style={{fontSize:13}}>{
+                      (() => {
+                        const p = account && Array.isArray(account.positions) ? account.positions.find(x => x.symbol === String(symbol).toUpperCase()) : null
+                        const amt = p ? Number(p.positionAmt) : Number(holdingsStr) || 0
+                        const val = (isFinite(Number(lastPrice)) ? amt * Number(lastPrice) : null)
+                        return val == null ? 'Position Value: —' : `Position Value: ${formatPrice(val)} USDT`
+                      })()
+                    }</div>
                   </div>
                 </div>
 
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>Futures USDT Balance</div>
-                    <div style={{fontSize:12,color:'var(--muted)'}}>Binance Futures wallet (manual input)</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
-                    <input className="theme-input" type="number" min={0} step="any" value={futuresBalanceStr || '0'} onChange={e=>setFuturesBalanceStr(e.target.value)} onBlur={() => { const v = String(Number(futuresBalanceStr) || 0); setFuturesBalanceStr(v); try { localStorage.setItem('futuresBalance', v) } catch(e){} }} style={{width:100,padding:6,borderRadius:6,textAlign:'right'}} />
-                    <div style={{fontSize:13}}>{`Available: ${formatPrice(Number(futuresBalanceStr||0))} USDT`}</div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:16,fontWeight:600}}>{account && typeof account.totalWalletBalance !== 'undefined' ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
+                    <div style={{fontSize:13}}>{account && typeof account.totalUnrealizedProfit !== 'undefined' ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
                   </div>
                 </div>
               </div>
