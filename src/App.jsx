@@ -264,7 +264,9 @@ export default function App() {
           setLiveEma26(liveNext26)
           setLiveEma200(liveNext200)
           // also schedule immediate UI update for new candle (include live EMA)
-          scheduleRenderUpdate({ ...currentCandleRef.current, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200 })
+          // compute intra-bar progress [0..1] for smoother live EMA interpolation
+          const progress = Math.min(1, Math.max(0, (ts / 1000 - bucket) / 300))
+          scheduleRenderUpdate({ ...currentCandleRef.current, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200, _progress: progress })
         } else {
           // update existing candle
           const c = { ...currentCandleRef.current }
@@ -282,7 +284,8 @@ export default function App() {
           setLiveEma26(liveNext26)
           setLiveEma200(liveNext200)
           // schedule immediate UI update for the updated candle (include live EMA)
-          scheduleRenderUpdate({ ...c, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200 })
+          const progress = Math.min(1, Math.max(0, (ts / 1000 - bucket) / 300))
+          scheduleRenderUpdate({ ...c, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200, _progress: progress })
         }
       } catch (err) { console.error('parse', err) }
     }
@@ -509,14 +512,31 @@ function CandlestickChart({ data = [], height = 360 }) {
             if (d.ema26 != null) points26.push([x, yFor(d.ema26)])
             if (d.ema200 != null) points200.push([x, yFor(d.ema200)])
 
-            // build live series: prefer closed EMA for historical points, but for the
-            // most-recent candle use the tick-based _liveEma if present so the
-            // dashed live overlay shows smooth, up-to-date movement only at the
-            // current bar (avoids jagged historical overlays when _liveEma gets
-            // attached to older entries).
+            // build live series: prefer closed EMA for historical points. For the
+            // most-recent candle use intra-bar interpolation between the closed
+            // EMA and the tick-based _liveEma according to _progress (0..1).
             const isLast = i === data.length - 1
-            const v26 = (isLast && d._liveEma26 != null) ? d._liveEma26 : (d.ema26 != null ? d.ema26 : null)
-            const v200 = (isLast && d._liveEma200 != null) ? d._liveEma200 : (d.ema200 != null ? d.ema200 : null)
+            let v26 = null
+            let v200 = null
+            if (isLast && d._liveEma26 != null) {
+              if (d.ema26 != null && typeof d._progress === 'number') {
+                v26 = d.ema26 * (1 - d._progress) + d._liveEma26 * d._progress
+              } else {
+                v26 = d._liveEma26
+              }
+            } else if (d.ema26 != null) {
+              v26 = d.ema26
+            }
+
+            if (isLast && d._liveEma200 != null) {
+              if (d.ema200 != null && typeof d._progress === 'number') {
+                v200 = d.ema200 * (1 - d._progress) + d._liveEma200 * d._progress
+              } else {
+                v200 = d._liveEma200
+              }
+            } else if (d.ema200 != null) {
+              v200 = d.ema200
+            }
             if (v26 != null) live26.push([x, yFor(v26)])
             if (v200 != null) live200.push([x, yFor(v200)])
           })
