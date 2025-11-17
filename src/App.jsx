@@ -103,7 +103,7 @@ export default function App() {
           if (!mounted) return
                 if (data) {
                   setAccount(data)
-                  if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+                  if (Number.isFinite(Number(data.totalWalletBalance))) {
                     try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
                     setFuturesBalanceStr(String(data.totalWalletBalance))
                   }
@@ -147,7 +147,7 @@ export default function App() {
         const data = JSON.parse(e.data)
         if (data) {
           setAccount(data)
-          if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+          if (Number.isFinite(Number(data.totalWalletBalance))) {
             try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
             setFuturesBalanceStr(String(data.totalWalletBalance))
           }
@@ -260,8 +260,8 @@ export default function App() {
                     <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{account && typeof account.totalWalletBalance !== 'undefined' ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
-                    <div style={{fontSize:13}}>{account && typeof account.totalUnrealizedProfit !== 'undefined' ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
+                    <div style={{fontSize:16,fontWeight:600}}>{Number.isFinite(Number(account && account.totalWalletBalance)) ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
+                    <div style={{fontSize:13}}>{Number.isFinite(Number(account && account.totalUnrealizedProfit)) ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
                   </div>
                 </div>
               </div>
