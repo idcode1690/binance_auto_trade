@@ -1,13 +1,14 @@
 :root{
-  --bg:#071127; /* dark Binance-like background */
-  --surface:#0b1724;
-  --card:#0f2233;
-  --muted:#9aa6b2;
-  --text:#dbe9f5;
-  --accent:#f3b000; /* Binance yellow accent */
-  --success:#26a69a; /* up candle color */
-  --danger:#ff4d4f; /* down candle color */
-  --border:rgba(255,255,255,0.03);
+  /* VS Code-like Dark (black/gray) theme */
+  --bg: #1e1e1e;      /* editor background */
+  --surface: #252526; /* side panels */
+  --card: #1f1f1f;    /* card / chart surface */
+  --muted: #9a9a9a;   /* subdued text */
+  --text: #d4d4d4;    /* primary text */
+  --accent: #007acc;  /* VSCode blue accent */
+  --success: #26a69a; /* up candle color */
+  --danger: #ff4d4f;  /* down candle color */
+  --border: rgba(255,255,255,0.03);
 }
 html,body,#root{
   height:100%;
@@ -48,34 +49,34 @@ body {
   flex:1 1 auto;
 }
 .main-chart {
-  background: linear-gradient(180deg, rgba(0,0,0,0.12), transparent);
-  border-radius:8px;
-  padding:8px;
-  border:1px solid var(--border);
-  display:flex;
-  flex-direction:column;
-  min-height:0; /* allow children to shrink */
+  background: var(--card);
+  border-radius: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* allow children to shrink */
 }
 .sidebar {
-  background:var(--surface);
-  border-radius:8px;
-  padding:12px;
-  border:1px solid var(--border);
-  overflow:auto;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  overflow: auto;
 }
 .card.no-frame { background:transparent; border:none; padding:0 }
 
 .meta { color:var(--muted); }
 .alerts { list-style:none; padding:0; margin:0 }
 .alert-item { padding:8px 0; border-bottom:1px dashed rgba(255,255,255,0.03) }
-.btn { cursor:pointer; padding:8px 12px; border-radius:6px; border:none; background:var(--accent); color:white }
-.btn.secondary { background:#2d6f9a }
+.btn { cursor: pointer; padding: 8px 12px; border-radius: 6px; border: none; background: var(--accent); color: white }
+.btn.secondary { background: #2d6f9a }
 .status { display:inline-block; padding:6px 10px; border-radius:6px; font-weight:600 }
 .bull { color:var(--success) }
 .bear { color:var(--danger) }
 
 /* make chart area expand to fill chart column */
-.candles-chart, #chart-area { width:100%; height:100%; flex:1 1 auto }
+.candles-chart, #chart-area { width: 100%; height: 100%; flex: 1 1 auto; background: var(--card) }
 
 /* ensure lightweight-charts container fills the card entirely */
 .main-chart > div { width:100%; height:100%; }
