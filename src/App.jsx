@@ -83,27 +83,14 @@ export default function App() {
           // always keep the latest temp in ref for the rAF update
           latestTempRef.current = tempCandle
 
-          // Immediately update price and live EMAs for snappy UI feedback
-          try {
-            setDisplayPrice(tempCandle.close)
-            if (tempCandle._liveEma26 != null) {
-              liveEma26Ref.current = tempCandle._liveEma26
-              setLiveEma26(tempCandle._liveEma26)
-            }
-            if (tempCandle._liveEma200 != null) {
-              liveEma200Ref.current = tempCandle._liveEma200
-              setLiveEma200(tempCandle._liveEma200)
-            }
-          } catch (e) {
-            // ignore
-          }
-
-          // Batch the heavier DOM state work (array copying) into rAF
+          // Batch price + live EMA + last-candle update together in rAF
+          // so displayed price and chart move in lock-step.
           if (pendingFrameRef.current) return
           pendingFrameRef.current = window.requestAnimationFrame(() => {
             pendingFrameRef.current = null
             const temp = latestTempRef.current
             if (!temp) return
+
             // update last candle in state without re-computing full history
             setCandles(prev => {
               const base = prev.slice()
@@ -114,6 +101,21 @@ export default function App() {
               }
               return base
             })
+
+            // update displayed price and live EMA values together (keeps them identical)
+            try {
+              setDisplayPrice(temp.close)
+              if (temp._liveEma26 != null) {
+                liveEma26Ref.current = temp._liveEma26
+                setLiveEma26(temp._liveEma26)
+              }
+              if (temp._liveEma200 != null) {
+                liveEma200Ref.current = temp._liveEma200
+                setLiveEma200(temp._liveEma200)
+              }
+            } catch (e) {
+              // ignore
+            }
           })
         }
 
@@ -206,37 +208,9 @@ export default function App() {
     setConnected(false)
   }
 
-  // expose latest in-chart current candle (not yet closed)
-  useEffect(() => {
-    // keep a fallback periodic sync; most realtime updates are handled via rAF batching
-    const interval = setInterval(() => {
-      const cur = currentCandleRef.current
-      if (!cur) return
-      // reflect the current open/high/low/close as the last candle on chart (don't commit to state)
-      const combined = [...candlesRef.current]
-        if (combined.length === 0 || combined[combined.length - 1].time !== cur.time) {
-        // push-temporary
-        const temp = { ...cur }
-        // attach ema placeholders if available
-        temp.ema26 = ema26
-        temp.ema200 = ema200
-        const data = [...combined, temp]
-        setCandles(data)
-          // keep displayed price in sync with the in-chart current candle
-          setDisplayPrice(temp.close)
-      } else {
-        const last = { ...combined[combined.length - 1], ...cur }
-        last.ema26 = ema26
-        last.ema200 = ema200
-        const data = [...combined.slice(0, -1), last]
-        setCandles(data)
-          // keep displayed price in sync with the in-chart current candle
-          setDisplayPrice(last.close)
-      }
-    }, 250)
-    return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ema26, ema200])
+  // The UI now updates via the WebSocket -> scheduleRenderUpdate rAF batch.
+  // Removed the separate 250ms interval sync so price and chart are updated
+  // together in the same animation frame for identical timing.
 
   // TradingView load effect: initialize widget or fall back to internal chart
   useEffect(() => {
@@ -460,6 +434,14 @@ export default function App() {
         setEma26(prev26)
         setEma200(prev200)
         setCandles(parsed)
+        // initialize displayed price to the most recent close so price and chart start synced
+        try {
+          const last = parsed[parsed.length - 1]
+          if (last && last.close != null) {
+            setDisplayPrice(last.close)
+            setLastPrice(last.close)
+          }
+        } catch (e) {}
       } catch (err) {
         console.warn('failed to fetch klines', err)
       }
