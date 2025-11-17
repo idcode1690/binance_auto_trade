@@ -363,11 +363,11 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
 
 function PositionsList({ account }) {
   const positions = (account && Array.isArray(account.positions)) ? account.positions.filter(p => Number(p.positionAmt) && Number(p.positionAmt) !== 0) : []
-  const fmt = (v) => {
+  const fmt = (v, digits = 8) => {
     if (v == null) return '-'
     const n = Number(v)
     if (!isFinite(n)) return v
-    return n.toLocaleString(undefined, { maximumFractionDigits: 8 })
+    return n.toLocaleString(undefined, { maximumFractionDigits: digits })
   }
   return (
     <div className="positions-section" style={{marginTop:12}}>
@@ -393,9 +393,34 @@ function PositionsList({ account }) {
                   <td>{p.symbol}</td>
                   <td className={Number(p.positionAmt) > 0 ? 'bull' : 'bear'}>{fmt(p.positionAmt)}</td>
                   <td>{fmt(p.entryPrice)}</td>
-                  <td className={Number(p.unrealizedProfit) >= 0 ? 'bull' : 'bear'}>{fmt(p.unrealizedProfit)}</td>
+                  {
+                    // compute percentage: unrealizedProfit / (abs(positionAmt) * entryPrice)
+                  }
+                  <td className={Number(p.unrealizedProfit) >= 0 ? 'bull' : 'bear'}>
+                    {fmt(p.unrealizedProfit, 6)}
+                    {(() => {
+                      const amt = Math.abs(Number(p.positionAmt) || 0)
+                      const entry = Number(p.entryPrice) || 0
+                      const up = Number(p.unrealizedProfit) || 0
+                      if (amt > 0 && entry > 0) {
+                        const notional = amt * entry
+                        const pct = notional > 0 ? (up / notional) * 100 : 0
+                        const sign = pct > 0 ? '+' : ''
+                        return (<div style={{fontSize:11,color:'var(--muted)'}}>{sign}{fmt(pct,2)}%</div>)
+                      }
+                      return null
+                    })()}
+                  </td>
                   <td>{p.leverage || '-'}</td>
-                  <td>{p.marginType || (p.isIsolated ? 'ISOLATED' : 'CROSSED') || '-'}</td>
+                  <td>{(() => {
+                    // Prefer explicit marginType if provided, normalize casing
+                    if (p.marginType) return String(p.marginType).toUpperCase()
+                    // Binance may provide an `isolated` boolean or `isIsolated`
+                    if (typeof p.isolated === 'boolean') return p.isolated ? 'ISOLATED' : 'CROSSED'
+                    if (typeof p.isIsolated === 'boolean') return p.isIsolated ? 'ISOLATED' : 'CROSSED'
+                    // fallback to dash
+                    return '-'
+                  })()}</td>
                 </tr>
               ))}
             </tbody>
