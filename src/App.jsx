@@ -141,8 +141,9 @@ export default function App() {
   const alpha200 = 2 / (200 + 1)
   // live (tick) EMA smoothing factors (higher alpha => more responsive)
   // you can tune these for faster (larger) or smoother (smaller) live EMA behavior
-  const alphaLive26 = 0.2 // fast-reacting live EMA for 26
-  const alphaLive200 = 0.05 // smoother live EMA for 200
+  // make live EMA a bit smoother to avoid jagged lines in the chart
+  const alphaLive26 = 0.12 // smoother live-reacting EMA for 26
+  const alphaLive200 = 0.02 // smoother live EMA for 200
 
   useEffect(() => { candlesRef.current = candles }, [candles])
 
@@ -508,9 +509,14 @@ function CandlestickChart({ data = [], height = 360 }) {
             if (d.ema26 != null) points26.push([x, yFor(d.ema26)])
             if (d.ema200 != null) points200.push([x, yFor(d.ema200)])
 
-            // build live series: use _liveEma* if available, otherwise closed value
-            const v26 = d._liveEma26 != null ? d._liveEma26 : (d.ema26 != null ? d.ema26 : null)
-            const v200 = d._liveEma200 != null ? d._liveEma200 : (d.ema200 != null ? d.ema200 : null)
+            // build live series: prefer closed EMA for historical points, but for the
+            // most-recent candle use the tick-based _liveEma if present so the
+            // dashed live overlay shows smooth, up-to-date movement only at the
+            // current bar (avoids jagged historical overlays when _liveEma gets
+            // attached to older entries).
+            const isLast = i === data.length - 1
+            const v26 = (isLast && d._liveEma26 != null) ? d._liveEma26 : (d.ema26 != null ? d.ema26 : null)
+            const v200 = (isLast && d._liveEma200 != null) ? d._liveEma200 : (d.ema200 != null ? d.ema200 : null)
             if (v26 != null) live26.push([x, yFor(v26)])
             if (v200 != null) live200.push([x, yFor(v200)])
           })
