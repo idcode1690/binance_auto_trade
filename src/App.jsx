@@ -66,12 +66,6 @@ export default function App() {
                 onTrade={setLastPrice}
                 onCross={(c) => setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 50))}
               />
-              <div style={{marginTop:8}}>
-                <button
-                  className="btn"
-                  onClick={() => setAlerts(prev => [{ id: Date.now(), type: 'bull', time: Date.now(), price: lastPrice || 0 }, ...prev].slice(0,50))}
-                >Trigger Test Cross</button>
-              </div>
             </div>
           </div>
         </section>
@@ -109,32 +103,16 @@ export default function App() {
 }
 
 function ChartToggle({ livePrice, onTrade, onCross }) {
-  const [show, setShow] = useState(true)
   return (
-    <div>
-      {!show ? (
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <button className="btn" onClick={() => setShow(true)}>Enable Chart</button>
-          <div style={{color:'var(--muted)',fontSize:13}}>Enable the EMA chart (lazy-loaded)</div>
-        </div>
-      ) : (
-        <div>
-          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
-            <button className="btn" onClick={() => setShow(false)}>Disable Chart</button>
-            <div style={{color:'var(--muted)',fontSize:13}}>Chart mounted — use this to reproduce errors</div>
-          </div>
-          <Suspense fallback={<div className="meta">Loading chart...</div>}>
-            <SmallEMAChart
-              interval="1m"
-              limit={300}
-              livePrice={livePrice}
-              onTrade={onTrade}
-              onCross={onCross}
-            />
-          </Suspense>
-        </div>
-      )}
-    </div>
+    <Suspense fallback={<div className="meta">Loading chart...</div>}>
+      <SmallEMAChart
+        interval="1m"
+        limit={300}
+        livePrice={livePrice}
+        onTrade={onTrade}
+        onCross={onCross}
+      />
+    </Suspense>
   )
 }
 
