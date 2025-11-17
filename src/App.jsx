@@ -138,12 +138,20 @@ export default function App() {
             setEma26(nextE26)
             setEma200(nextE200)
 
-            // attach EMA values to closed candle and push
+            // attach EMA values to closed candle and replace last entry
+            // (if it already represents the same time) or push otherwise.
+            // This prevents duplicating a closed candle and ensures the
+            // live/current candle remains at the right-most position.
             closed.ema26 = nextE26
             closed.ema200 = nextE200
             setCandles(cs => {
-              const withEMA = [...cs, closed]
-              return withEMA
+              const out = cs.slice()
+              if (out.length > 0 && out[out.length - 1].time === closed.time) {
+                out[out.length - 1] = closed
+              } else {
+                out.push(closed)
+              }
+              return out
             })
 
             // detect cross right here based on closed candle EMAs
