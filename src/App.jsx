@@ -80,6 +80,55 @@ function DashboardCard({ candles = [], displayPrice, lastPrice, ema26, ema200, c
   )
 }
 
+function TopBar({ title, subtitle, displayPrice, lastPrice, ema26, ema200, connected, startWs, stopWs }) {
+  return (
+    <div className="header">
+      <div>
+        <div className="title">{title}</div>
+        <div className="top-meta">{subtitle}</div>
+        <div style={{marginTop:6}}>
+          <span className="meta" style={{marginRight:12}}>EMA26: {ema26 == null ? '—' : formatNumber(ema26)}</span>
+          <span className="meta" style={{marginRight:12}}>EMA200: {ema200 == null ? '—' : formatNumber(ema200)}</span>
+        </div>
+      </div>
+      <div style={{textAlign:'right'}}>
+        <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
+        <div style={{marginTop:8}}>
+          <span className="meta">Status: <span className="status" style={{background: connected ? 'var(--success)' : '#3b1b1b'}}>{connected ? 'Connected' : 'Disconnected'}</span></span>
+        </div>
+        <div style={{marginTop:8}}>
+          <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AlertsList({ alerts = [] }) {
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center', marginBottom:8}}>
+        <div><strong>Cross Alerts (5m)</strong></div>
+        <div className="meta">Latest first (keeps 50)</div>
+      </div>
+      <ul className="alerts">
+        {alerts.length === 0 && <li className="alert-item meta">No crosses detected yet.</li>}
+        {alerts.map((a, i) => (
+          <li key={i} className="alert-item">
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <span className={a.type === 'bull' ? 'bull' : 'bear'}>{a.type === 'bull' ? 'Bull Cross ▲' : 'Bear Cross ▼'}</span>
+                &nbsp; @ {a.price ? formatNumber(a.price) : '—'}
+                <div className="meta">{new Date(a.time).toLocaleString()}</div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // floor ms timestamp to 5-minute bucket start (in seconds)
 function floorTo5MinSec(ms) {
   return Math.floor(ms / 1000 / 300) * 300
@@ -389,31 +438,17 @@ export default function App() {
 
   return (
     <div className="container body-root">
-      <div className="header">
-        <div>
-          <div className="title">Binance BTC/USDT — 5m Candles + EMA26/200</div>
-          <div className="top-meta">Real-time trade price from Binance (aggregated to 5m candles)</div>
-          <div style={{marginTop:6}}>
-            <span className="meta" style={{marginRight:12}}>EMA26 (closed): {ema26 == null ? '—' : formatNumber(ema26)}</span>
-            <span className="meta" style={{marginRight:12}}>EMA26 (live): {liveEma26 == null ? '—' : formatNumber(liveEma26)}</span>
-            <span className="meta" style={{marginRight:12}}>EMA200 (closed): {ema200 == null ? '—' : formatNumber(ema200)}</span>
-            <span className="meta" style={{marginRight:12}}>EMA200 (live): {liveEma200 == null ? '—' : formatNumber(liveEma200)}</span>
-            <span style={{fontWeight:700, marginLeft:6}} className={ema26 != null && ema200 != null ? (ema26 > ema200 ? 'bull' : (ema26 < ema200 ? 'bear' : 'meta')) : 'meta'}>
-              {ema26 == null || ema200 == null ? 'EMA: —' : (ema26 > ema200 ? 'Bull Cross ▲' : (ema26 < ema200 ? 'Bear Cross ▼' : 'Neutral'))}
-            </span>
-          </div>
-        </div>
-        <div style={{textAlign:'right'}}>
-          <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
-          <div style={{marginTop:8}}>
-            <span>Status: <span className="status" style={{background: connected ? 'var(--success)' : '#3b1b1b'}}>{connected ? 'Connected' : 'Disconnected'}</span></span>
-          </div>
-          <div style={{marginTop:8}}>
-            <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
-          </div>
-          
-        </div>
-      </div>
+      <TopBar
+        title={"Binance BTC/USDT — 5m Candles + EMA26/200"}
+        subtitle={"Real-time trade price from Binance (aggregated to 5m candles)"}
+        displayPrice={displayPrice}
+        lastPrice={lastPrice}
+        ema26={ema26}
+        ema200={ema200}
+        connected={connected}
+        startWs={startWs}
+        stopWs={stopWs}
+      />
 
       <div className="main-grid">
           <div className="main-chart card no-frame">
@@ -430,24 +465,7 @@ export default function App() {
           </div>
 
         <aside className="sidebar">
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center', marginBottom:8}}>
-            <div><strong>Cross Alerts (5m)</strong></div>
-            <div className="meta">Latest first (keeps 50)</div>
-          </div>
-          <ul className="alerts">
-            {alerts.length === 0 && <li className="alert-item meta">No crosses detected yet.</li>}
-            {alerts.map((a, i) => (
-              <li key={i} className="alert-item">
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div>
-                    <span className={a.type === 'bull' ? 'bull' : 'bear'}>{a.type === 'bull' ? 'Bull Cross ▲' : 'Bear Cross ▼'}</span>
-                    &nbsp; @ {a.price ? formatNumber(a.price) : '—'}
-                    <div className="meta">{new Date(a.time).toLocaleString()}</div>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <AlertsList alerts={alerts} />
         </aside>
       </div>
     </div>
