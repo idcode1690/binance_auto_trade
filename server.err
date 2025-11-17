@@ -1,0 +1,8 @@
+futures/order error {
+  code: -4164,
+  msg: "Order's notional must be no smaller than 100 (unless you choose reduce only)."
+}
+futures/order error {
+  code: -4164,
+  msg: "Order's notional must be no smaller than 100 (unless you choose reduce only)."
+}
