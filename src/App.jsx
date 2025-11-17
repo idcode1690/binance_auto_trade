@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, Suspense } from 'react'
 
 /*
   Redesigned front-end: Minimal, responsive dashboard shell.
-  - No websocket or charting logic included here.
-  - Edit this file to reintroduce data sources or features.
 */
+
+const SmallEMAChart = React.lazy(() => import('./SmallEMAChart'))
 
 function Hero({ title, subtitle }) {
   return (
@@ -17,6 +17,8 @@ function Hero({ title, subtitle }) {
     </header>
   )
 }
+
+
 
 function StatCard({ label, value, hint }) {
   return (
@@ -31,53 +33,19 @@ function StatCard({ label, value, hint }) {
 export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
-  const price = lastPrice == null ? '—' : Number(lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })
-  const change = '—'
+  const [alerts, setAlerts] = useState([])
+  const price = lastPrice == null ? '' : Number(lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })
+  const change = ''
   const candles = 0
 
   const wsRef = useRef(null)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
-
-  useEffect(() => {
-    // auto-start websocket on mount
-    startWs()
-    return () => stopWs()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function startWs() {
-    if (wsRef.current) return
-    try {
-      const ws = new WebSocket(BINANCE_WS)
-      wsRef.current = ws
-      ws.onopen = () => setConnected(true)
-      ws.onclose = () => { setConnected(false); wsRef.current = null }
-      ws.onerror = (e) => console.warn('ws err', e)
-      ws.onmessage = (ev) => {
-        try {
-          const d = JSON.parse(ev.data)
-          const price = parseFloat(d.p)
-          if (isFinite(price)) setLastPrice(price)
-        } catch (err) {
-          // ignore parse errors
-        }
-      }
-    } catch (err) {
-      console.warn('ws start failed', err)
-    }
-  }
-
-  function stopWs() {
-    if (wsRef.current) {
-      try { wsRef.current.close() } catch (e) {}
-      wsRef.current = null
-    }
-    setConnected(false)
-  }
+  // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
+  // callbacks via the `onTrade` prop so we can update `lastPrice`.
 
   return (
     <div className="container body-root">
-      <Hero title="Binance BTC/USDT" subtitle="5m candles · EMA26 / EMA200" />
+      <Hero title="Binance BTC/USDT" subtitle="1m candles · EMA26 / EMA200" />
 
       <main className="main-grid">
         <section className="main-chart card">
@@ -89,14 +57,40 @@ export default function App() {
               </div>
             </div>
 
-            {/* dashboard-body removed per user request */}
+            {/* small EMA chart under the price
+                Temporarily disabled because a runtime error in the chart
+                causes the whole page to fail. Re-enable after debugging. */}
+            <div style={{marginTop: 8}}>
+              <div className="meta" style={{padding:12}}>Chart disabled for debugging — re-enabling after fix.</div>
+            </div>
           </div>
         </section>
 
         <aside className="sidebar card">
           <div className="sidebar-inner">
             <h3 style={{marginTop:0}}>Cross Alerts</h3>
-            <div className="meta">No alerts yet.</div>
+            <div className="meta">
+              {alerts && alerts.length > 0 ? (
+                <ul className="alerts">
+                  {alerts.map(a => (
+                    <li key={a.id} className="alert-item">
+                      <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                        <div>
+                          <strong className={a.type === 'bull' ? 'bull' : 'bear'}>
+                            {a.type === 'bull' ? 'Bull' : 'Bear'} Cross
+                          </strong>
+                          <div style={{fontSize:12,color:'var(--muted)'}}>
+                            {new Date(a.time).toLocaleString()} — {Number(a.price).toLocaleString(undefined,{maximumFractionDigits:2})}
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                'No alerts yet.'
+              )}
+            </div>
           </div>
         </aside>
       </main>

@@ -111,6 +111,45 @@ body {
 /* ensure lightweight-charts container fills the card entirely */
 .main-chart > div { width: 100%; height: 100%; }
 
+/* Chart SVG styling */
+.chart-svg{
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+  border-radius: 8px;
+  display: block;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+.chart-svg path{ shape-rendering: geometricPrecision; }
+.chart-svg line{ stroke-linecap: round; }
+.chart-svg rect{ rx: 0; shape-rendering: crispEdges }
+
+/* EMA lines */
+.chart-svg .ema26{ stroke: #ff9900; stroke-width: 1.6; }
+.chart-svg .ema200{ stroke: #888888; stroke-width: 1.2; stroke-dasharray: 3 2 }
+
+/* Cross markers */
+.chart-svg .cross-marker{ stroke: #fff; stroke-width: 0.6; r:4 }
+.chart-svg .cross-marker.bull{ fill: var(--success) }
+.chart-svg .cross-marker.bear{ fill: var(--danger) }
+
+/* Candlestick default visuals (lines and rects) */
+.chart-svg line{ stroke-width: 1 }
+.chart-svg rect{ stroke: none; }
+
+/* Legend under the chart */
+.chart-legend{ display:flex; gap:12px; align-items:center; margin-top:8px; color:var(--muted); font-size:13px }
+.chart-legend .legend-item{ display:flex; align-items:center; gap:6px }
+.chart-legend .swatch{ width:12px; height:8px; display:inline-block; border-radius:2px; box-shadow: inset 0 -1px rgba(0,0,0,0.2) }
+.chart-legend .swatch.ema26{ background:#ff9900 }
+.chart-legend .swatch.ema200{ background:#888 }
+.chart-legend .swatch.bull{ background:var(--success); width:10px; height:10px; border-radius:50% }
+.chart-legend .swatch.bear{ background:var(--danger); width:10px; height:10px; border-radius:50% }
+
+/* make chart responsive */
+@media (max-width:900px){
+  .chart-svg{ height:140px !important }
+  .chart-legend{ font-size:12px; gap:8px }
+}
+
 /* responsive: collapse sidebar on narrow screens */
 @media (max-width:1100px){
   .container { padding: 16px }
