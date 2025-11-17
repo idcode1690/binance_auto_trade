@@ -386,7 +386,7 @@ function PositionsList({ account }) {
                 <th>Symbol</th>
                 <th>Size</th>
                 <th>Entry</th>
-                <th>Unrealized P/L</th>
+                <th>PNL (ROI %)</th>
                 <th>Leverage</th>
                 <th>Margin</th>
               </tr>
@@ -401,7 +401,6 @@ function PositionsList({ account }) {
                     // compute percentage: unrealizedProfit / (abs(positionAmt) * entryPrice)
                   }
                   <td className={Number(p.unrealizedProfit) >= 0 ? 'bull' : 'bear'}>
-                    {fmt(p.unrealizedProfit, 6)}
                     {(() => {
                       const amt = Math.abs(Number(p.positionAmt) || 0)
                       const entry = Number(p.entryPrice) || 0
@@ -409,18 +408,22 @@ function PositionsList({ account }) {
                       const initMargin = Number(p.positionInitialMargin || 0) || 0
                       let pct = null
                       if (initMargin > 0) {
-                        // ROI relative to initial margin
                         pct = (up / initMargin) * 100
                       } else if (amt > 0 && entry > 0) {
-                        // fallback: PNL / notional
                         const notional = amt * entry
                         pct = notional > 0 ? (up / notional) * 100 : 0
                       }
-                      if (pct !== null) {
-                        const sign = pct > 0 ? '+' : ''
-                        return (<div style={{fontSize:11,color:'var(--muted)'}}>{sign}{fmt(pct,2)}% ROI</div>)
-                      }
-                      return null
+                      const amountSign = up > 0 ? '+' : (up < 0 ? '-' : '')
+                      return (
+                        <div>
+                          <div style={{fontWeight:700}}>{amountSign}{fmt(Math.abs(up), 2)} USDT</div>
+                          {pct !== null ? (() => {
+                            const pctNum = Number(pct) || 0
+                            const pctSign = pctNum > 0 ? '+' : (pctNum < 0 ? '-' : '')
+                            return <div style={{fontSize:11,color:'var(--muted)'}}>({pctSign}{fmt(Math.abs(pctNum),2)}%)</div>
+                          })() : null}
+                        </div>
+                      )
                     })()}
                   </td>
                   <td>{p.leverage || '-'}</td>
