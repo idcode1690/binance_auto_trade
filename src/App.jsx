@@ -122,20 +122,34 @@ export default function App() {
 
         <aside className="sidebar card">
           <div className="sidebar-inner">
-            <h3 style={{marginTop:0}}>Assets</h3>
+            <h3 style={{marginTop:0}}>Futures Account</h3>
             <div className="meta">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:600}}>BTC Holdings</div>
-                  <div style={{fontSize:12,color:'var(--muted)'}}>{`Price: ${price || '—'}`}</div>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600}}>BTC Position</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>{`Price: ${price || '—'}`}</div>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
+                    <input className="theme-input" type="number" min={0} step="any" value={holdingsStr} onChange={e=>setHoldingsStr(e.target.value)} onBlur={() => { const v = String(Number(holdingsStr) || 0); setHoldingsStr(v); try { localStorage.setItem('holdings', v) } catch(e){} }} style={{width:100,padding:6,borderRadius:6,textAlign:'right'}} />
+                    <div style={{fontSize:13}}>{value == null ? 'Position Value: —' : `Position Value: ${formatPrice(value)} USDT`}</div>
+                  </div>
                 </div>
-                <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
-                  <input className="theme-input" type="number" min={0} step="any" value={holdingsStr} onChange={e=>setHoldingsStr(e.target.value)} onBlur={() => { const v = String(Number(holdingsStr) || 0); setHoldingsStr(v); try { localStorage.setItem('holdings', v) } catch(e){} }} style={{width:80,padding:6,borderRadius:6,textAlign:'right'}} />
-                  <div style={{fontSize:13}}>{value == null ? 'Value: —' : `Value: ${formatPrice(value)} USDT`}</div>
+
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:600}}>Futures USDT Balance</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>Binance Futures wallet (manual input)</div>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end'}}>
+                    <input className="theme-input" type="number" min={0} step="any" value={futuresBalanceStr || '0'} onChange={e=>setFuturesBalanceStr(e.target.value)} onBlur={() => { const v = String(Number(futuresBalanceStr) || 0); setFuturesBalanceStr(v); try { localStorage.setItem('futuresBalance', v) } catch(e){} }} style={{width:100,padding:6,borderRadius:6,textAlign:'right'}} />
+                    <div style={{fontSize:13}}>{`Available: ${formatPrice(Number(futuresBalanceStr||0))} USDT`}</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <h3 style={{marginTop:0}}>Cross Alerts</h3>
+
+            <h3 style={{marginTop:12}}>Cross Alerts</h3>
             <div className="meta">
               {alerts && alerts.length > 0 ? (
                 <ul className="alerts">
