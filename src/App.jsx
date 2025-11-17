@@ -240,7 +240,10 @@ export default function App() {
                                   </div>
                                 ) : '—'}
                               </div>
-                              <div style={{flex:1,textAlign:'right'}}><span style={{color:pnlColor,fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</span><div style={{fontSize:12,color:'var(--muted)'}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div></div>
+                              <div style={{flex:1,textAlign:'right'}}>
+                                <span style={{color:pnlColor,fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</span>
+                                <div style={{fontSize:12,color:pnlColor}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
+                              </div>
                               <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
                             </div>
                           )
