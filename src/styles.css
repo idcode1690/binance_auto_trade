@@ -271,3 +271,15 @@ body {
 .tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
 .orders-list { list-style:none; padding:0; margin:0 }
 .orders-list .alert-item { display:flex; justify-content:space-between; align-items:center }
+
+/* Two-column Alerts / Orders layout: equal height columns, independent scrolling */
+.two-columns { display:flex; gap:12px; align-items:stretch; }
+.two-columns .col { flex:1; display:flex; flex-direction:column; min-height:120px; max-height:360px; }
+.two-columns .col > h4 { margin-top:0 }
+.two-columns .col .meta { overflow:auto; padding-right:6px }
+.two-columns .alerts, .two-columns .orders-list { list-style:none; padding:0; margin:0 }
+
+@media (max-width:900px){
+  .two-columns { flex-direction:column }
+  .two-columns .col { max-height: none }
+}

@@ -227,8 +227,8 @@ export default function App() {
 
             <div style={{marginTop:12}}>
               {/* Combined Cross (left) / Orders (right) view */}
-              <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                <div style={{flex:1}}>
+              <div className="two-columns">
+                <div className="col">
                   <h4 style={{marginTop:0}}>Cross Alerts</h4>
                   <div className="meta">
                     {(alerts && alerts.length > 0) ? (
@@ -252,7 +252,7 @@ export default function App() {
                     ) : ('No alerts yet.')}
                   </div>
                 </div>
-                <div style={{flex:1}}>
+                <div className="col">
                   <h4 style={{marginTop:0}}>Orders / Results</h4>
                   <div className="meta">
                     {(orders && orders.length > 0) ? (
