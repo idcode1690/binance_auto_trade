@@ -120,7 +120,21 @@ export default function App() {
 }
 
 function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1 }) {
-  const interval = `${Math.max(1, Number(minutes||1))}m`
+  const toBinanceInterval = (m) => {
+    const n = Math.max(1, Number(m || 1))
+    const map = {
+      1: '1m', 3: '3m', 5: '5m', 15: '15m', 30: '30m',
+      60: '1h', 120: '2h', 240: '4h', 360: '6h', 480: '8h', 720: '12h',
+      1440: '1d', 4320: '3d', 10080: '1w'
+    }
+    if (map[n]) return map[n]
+    // fallback: if divisible by 1440 use days, else if divisible by 60 use hours
+    if (n % 1440 === 0) return `${n / 1440}d`
+    if (n % 60 === 0) return `${n / 60}h`
+    // last resort: minutes string (Binance may reject unknown intervals)
+    return `${n}m`
+  }
+  const interval = toBinanceInterval(minutes)
   return (
     <Suspense fallback={<div className="meta">Loading chart...</div>}>
       <SmallEMAChart
