@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { createChart } from 'lightweight-charts'
 
 const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
 
@@ -47,6 +48,8 @@ export default function App() {
   const [tvLoaded, setTvLoaded] = useState(false)
   const [tvError, setTvError] = useState(null)
   const [tvLoading, setTvLoading] = useState(false)
+  // chart engine toggle: true = lightweight-charts, false = TradingView
+  const [useLightweight, setUseLightweight] = useState(true)
 
   // EMA smoothing factors for period counts (periods are number of 5-min candles)
   const alpha26 = 2 / (26 + 1)
@@ -474,45 +477,51 @@ export default function App() {
           </div>
           <div style={{marginTop:8}}>
             <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
+            <span style={{marginLeft:8}}>
+              <button className="btn" onClick={() => setUseLightweight(v => !v)}>{useLightweight ? 'Use TradingView' : 'Use Lightweight'}</button>
+            </span>
           </div>
         </div>
       </div>
 
       <div className="main-grid">
-        <div className="main-chart card no-frame">
-          {/* TradingView container (fills available area) */}
-          <div id="tradingview_chart" style={{width:'100%', height:'100%', display: tvLoaded && !tvError ? 'block' : 'none'}} />
+          <div className="main-chart card no-frame">
+            {/* TradingView container (fills available area) */}
+            <div id="tradingview_chart" style={{width:'100%', height:'100%', display: !useLightweight && tvLoaded && !tvError ? 'block' : 'none'}} />
 
-          {/* Fallback and diagnostics when TradingView isn't initialized */}
-            {/* Show a small loading indicator while TradingView is loading. */}
-            {tvLoading && (
+            {/* Lightweight Charts rendering when enabled or as fallback */}
+            {useLightweight && (
+              <div style={{width:'100%', height: Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
+                <LightweightChart data={candles} />
+              </div>
+            )}
+
+            {/* Loading indicator when TradingView is requested */}
+            {!useLightweight && tvLoading && (
               <div style={{display:'flex', alignItems:'center', gap:8, color:'#fbbf24', marginBottom:8}}>
                 <span>Loading TradingView...</span>
               </div>
             )}
 
-            {/* Only show the internal fallback chart if TradingView fails to load */}
-            {tvError && (
-              <div>
+            {/* Diagnostics when TradingView errors and Lightweight is not selected */}
+            {!useLightweight && tvError && (
+              <div style={{marginTop:8}}>
                 <div style={{marginBottom:8}}>
                   <strong>Chart:</strong>
                   <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
-
-                  {/* Allow user to attempt to load TradingView if automatic load failed */}
                   <span style={{display:'inline-block', marginLeft:12}}>
                     <button className="btn" onClick={() => attemptLoadTradingView()} disabled={tvLoading}>
                       {tvLoading ? 'Loading...' : 'Try TradingView'}
                     </button>
                   </span>
                 </div>
-                <CandlestickChart data={candles} height={Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))} />
                 <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
                   If the chart is blank, open DevTools → Console/Network to check for errors or blocked
-                  external scripts (TradingView). This page will show a fallback candlestick chart when TradingView cannot be loaded.
+                  external scripts (TradingView). You can switch to the Lightweight chart using the button above.
                 </div>
               </div>
             )}
-        </div>
+          </div>
 
         <aside className="sidebar">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center', marginBottom:8}}>
@@ -643,4 +652,92 @@ function CandlestickChart({ data = [], height = 360 }) {
       </svg>
     </div>
   )
+}
+
+function LightweightChart({ data = [] }) {
+  const ref = useRef(null)
+  const chartRef = useRef(null)
+  const candleSeriesRef = useRef(null)
+  const ema26RefSeries = useRef(null)
+  const ema200RefSeries = useRef(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // create chart
+    const chart = createChart(el, {
+      width: el.clientWidth,
+      height: el.clientHeight,
+      layout: { background: { color: '#071126' }, textColor: '#d1d5db' },
+      grid: { vertLines: { color: '#0b1220' }, horzLines: { color: '#0b1220' } },
+      rightPriceScale: { borderColor: '#0b1220' },
+      timeScale: { borderColor: '#0b1220' }
+    })
+    chartRef.current = chart
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#16a34a', downColor: '#dc2626', wickUpColor: '#16a34a', wickDownColor: '#dc2626'
+    })
+    candleSeriesRef.current = candleSeries
+
+    const e26 = chart.addLineSeries({ color: '#60a5fa', lineWidth: 2 })
+    const e200 = chart.addLineSeries({ color: '#f97316', lineWidth: 2 })
+    ema26RefSeries.current = e26
+    ema200RefSeries.current = e200
+
+    // resize observer
+    const ro = new ResizeObserver(() => {
+      if (!el) return
+      chart.applyOptions({ width: el.clientWidth, height: el.clientHeight })
+    })
+    ro.observe(el)
+
+    return () => {
+      try { ro.disconnect() } catch (e) {}
+      try { chart.remove() } catch (e) {}
+      chartRef.current = null
+      candleSeriesRef.current = null
+      ema26RefSeries.current = null
+      ema200RefSeries.current = null
+    }
+  }, [])
+
+  // update series when data changes
+  useEffect(() => {
+    const series = candleSeriesRef.current
+    const e26 = ema26RefSeries.current
+    const e200 = ema200RefSeries.current
+    if (!series) return
+
+    // map candles to lightweight format (time in seconds or {time: 'YYYY-MM-DD'})
+    const mapped = data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }))
+
+    if (mapped.length === 0) return
+    try {
+      // if many points, setData once; otherwise update incremental
+      if (mapped.length > 200) {
+        series.setData(mapped)
+      } else {
+        // update: set all for simplicity to keep EMA overlays in sync
+        series.setData(mapped)
+      }
+
+      // build EMA series points from data (prefer closed ema fields)
+      const points26 = []
+      const points200 = []
+      mapped.forEach((d, i) => {
+        const src = data[i]
+        const v26 = src && src.ema26 != null ? src.ema26 : null
+        const v200 = src && src.ema200 != null ? src.ema200 : null
+        if (v26 != null) points26.push({ time: d.time, value: v26 })
+        if (v200 != null) points200.push({ time: d.time, value: v200 })
+      })
+      if (e26) e26.setData(points26)
+      if (e200) e200.setData(points200)
+    } catch (err) {
+      console.warn('lightweight update failed', err)
+    }
+  }, [data])
+
+  return <div ref={ref} style={{width:'100%', height: '100%'}} />
 }
