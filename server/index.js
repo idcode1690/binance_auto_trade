@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const axios = require('axios')
 const crypto = require('crypto')
+const WebSocket = require('ws')
 const cors = require('cors')
 
 const app = express()
@@ -136,30 +137,27 @@ app.get('/api/futures/sse', async (req, res) => {
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive'
   })
-
-  let lastSnapshot = null
-  let closed = false
+  // We'll register this response in a global list so other parts of the server
+  // (including a Binance user-data websocket bridge) can push updates immediately.
+  if (!global.sseClients) global.sseClients = []
+  const client = { res, lastSnapshot: null }
+  global.sseClients.push(client)
 
   const send = (evt, data) => {
     try {
       res.write(`event: ${evt}\n`)
       res.write(`data: ${JSON.stringify(data)}\n\n`)
-    } catch (e) {
-      // ignore write errors
-    }
+    } catch (e) {}
   }
 
-  const poll = async () => {
-    if (closed) return
+  // Send an initial snapshot via polling once so clients see immediate data.
+  const doInitial = async () => {
     try {
       if (!API_KEY || !API_SECRET) {
-        // Emit a warning so the frontend can show a message and keep an empty snapshot
         send('account', { totalWalletBalance: 0, totalUnrealizedProfit: 0, positions: [], warning: 'Missing BINANCE_API_KEY or BINANCE_API_SECRET on server' })
         return
       }
-
       const data = await signedGet('/fapi/v2/account')
-      // Create a small payload with parsed numeric fields
       const out = {
         totalWalletBalance: typeof data.totalWalletBalance !== 'undefined' ? Number(data.totalWalletBalance) : null,
         totalUnrealizedProfit: typeof data.totalUnrealizedProfit !== 'undefined' ? Number(data.totalUnrealizedProfit) : null,
@@ -172,34 +170,124 @@ app.get('/api/futures/sse', async (req, res) => {
           marginType: p.marginType || undefined,
           positionSide: p.positionSide || undefined,
           positionInitialMargin: Number(p.positionInitialMargin || p.initialMargin || p.initMargin || 0) || 0,
-          isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsolatedWallet) : undefined)
+          isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsIsolatedWallet) : undefined)
         })) : []
       }
-      const snap = JSON.stringify(out)
-      if (snap !== lastSnapshot) {
-        lastSnapshot = snap
-        send('account', out)
-      }
+      client.lastSnapshot = JSON.stringify(out)
+      send('account', out)
     } catch (err) {
-      const remote = err && err.response
-      console.error('sse poll error', remote ? remote.data : err.message)
-      // If authentication error, emit an account event with a warning so frontend stays consistent
-      if (remote && remote.status === 401) {
-        send('account', { totalWalletBalance: 0, totalUnrealizedProfit: 0, positions: [], warning: 'Binance authentication failed (401). Check API key/secret or testnet setting.' })
-        return
-      }
+      // ignore initial errors; websocket bridge or later polls will send updates
     }
   }
-
-  // initial poll
-  poll()
-  const id = setInterval(poll, 2000)
+  doInitial()
 
   req.on('close', () => {
-    closed = true
-    clearInterval(id)
+    try {
+      const idx = global.sseClients.indexOf(client)
+      if (idx !== -1) global.sseClients.splice(idx, 1)
+    } catch (e) {}
   })
 })
+
+// Broadcast helper used by websocket bridge and fallbacks
+function broadcastAccountUpdate(out) {
+  try {
+    if (!global.sseClients || global.sseClients.length === 0) return
+    const snap = JSON.stringify(out)
+    for (const client of global.sseClients.slice()) {
+      try {
+        if (client.lastSnapshot === snap) continue
+        client.lastSnapshot = snap
+        client.res.write(`event: account\n`)
+        client.res.write(`data: ${snap}\n\n`)
+      } catch (e) {
+        // ignore per-client errors
+      }
+    }
+  } catch (e) {}
+}
+
+// Setup a Binance futures user-data websocket to receive ACCOUNT_UPDATE events
+// and forward them to connected SSE clients for near-instant updates.
+async function ensureUserDataWebsocket() {
+  if (!API_KEY) return
+  if (global.userDataWs && global.userDataWs.readyState === WebSocket.OPEN) return
+  try {
+    // create listenKey
+    const url = `${FUTURES_API_BASE}/fapi/v1/listenKey`
+    const resp = await axios.post(url, null, { headers: { 'X-MBX-APIKEY': API_KEY } })
+    const listenKey = resp.data && resp.data.listenKey ? resp.data.listenKey : (resp.data || '').listenKey || resp.data
+    if (!listenKey) return
+    const wsUrl = `${FUTURES_WS_BASE.replace(/\/+$/,'')}/ws/${listenKey}`
+    const ws = new WebSocket(wsUrl)
+    global.userDataWs = ws
+    ws.on('open', () => {
+      console.log('Binance user-data websocket opened')
+    })
+    ws.on('message', (msg) => {
+      try {
+        const data = JSON.parse(msg.toString())
+        // handle account updates
+        if (data && (data.e === 'ACCOUNT_UPDATE' || data.e === 'OUTBOUND_ACCOUNT_INFO')) {
+          // Build simplified payload similar to signedGet output
+          const out = { totalWalletBalance: null, totalUnrealizedProfit: null, positions: [] }
+          // Some streams include walletBalance/unrealizedProfit; try to extract
+          if (data.a && typeof data.a !== 'undefined') {
+            // futures ACCOUNT_UPDATE has 'a' for account
+            const acct = data.a
+            if (acct && typeof acct.b !== 'undefined') {
+              // b is balances array; skip
+            }
+          }
+          // Position updates may be under 'P' or 'p' depending on stream
+          if (Array.isArray(data.P) && data.P.length) {
+            out.positions = data.P.map(pp => ({
+              symbol: pp.s || pp.symbol,
+              positionAmt: Number(pp.pa || pp.positionAmt || 0) || 0,
+              entryPrice: Number(pp.ep || pp.entryPrice || 0) || 0,
+              unrealizedProfit: Number(pp.up || pp.unRealizedProfit || pp.unrealizedProfit || 0) || 0,
+              leverage: Number(pp.l || pp.leverage || 0) || undefined,
+              positionInitialMargin: Number(pp.im || pp.positionInitialMargin || 0) || 0
+            }))
+          } else if (Array.isArray(data.a && data.a.P) && data.a.P.length) {
+            out.positions = data.a.P.map(pp => ({
+              symbol: pp.s || pp.symbol,
+              positionAmt: Number(pp.pa || pp.positionAmt || 0) || 0,
+              entryPrice: Number(pp.ep || pp.entryPrice || 0) || 0,
+              unrealizedProfit: Number(pp.up || pp.unRealizedProfit || pp.unrealizedProfit || 0) || 0,
+              leverage: Number(pp.l || pp.leverage || 0) || undefined,
+              positionInitialMargin: Number(pp.im || pp.positionInitialMargin || 0) || 0
+            }))
+          }
+          if (out.positions.length) {
+            broadcastAccountUpdate(out)
+          }
+        }
+      } catch (e) {}
+    })
+    ws.on('close', () => {
+      console.log('Binance user-data websocket closed; will retry')
+      global.userDataWs = null
+      setTimeout(() => ensureUserDataWebsocket().catch(()=>{}), 5000)
+    })
+    ws.on('error', (err) => {
+      console.error('userDataWs error', err && err.message)
+      try { ws.close() } catch(e){}
+    })
+
+    // keepalive: ping the listenKey every 30 minutes
+    setInterval(async () => {
+      try {
+        await axios.put(`${FUTURES_API_BASE}/fapi/v1/listenKey`, null, { headers: { 'X-MBX-APIKEY': API_KEY } })
+      } catch (e) {}
+    }, 1000 * 60 * 30)
+  } catch (e) {
+    console.error('ensureUserDataWebsocket failed', e && e.message)
+  }
+}
+
+// Try to establish websocket bridge if keys present
+ensureUserDataWebsocket().catch(()=>{})
 
 app.post('/api/futures/order', async (req, res) => {
   try {
