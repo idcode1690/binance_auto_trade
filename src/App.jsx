@@ -58,10 +58,20 @@ export default function App() {
             </div>
 
             {/* small EMA chart under the price
-                Temporarily disabled because a runtime error in the chart
-                causes the whole page to fail. Re-enable after debugging. */}
+                Render behind a user toggle and React.Suspense so we can
+                enable it step-by-step and capture any initialization errors. */}
             <div style={{marginTop: 8}}>
-              <div className="meta" style={{padding:12}}>Chart disabled for debugging — re-enabling after fix.</div>
+              <ChartToggle
+                livePrice={lastPrice}
+                onTrade={setLastPrice}
+                onCross={(c) => setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 50))}
+              />
+              <div style={{marginTop:8}}>
+                <button
+                  className="btn"
+                  onClick={() => setAlerts(prev => [{ id: Date.now(), type: 'bull', time: Date.now(), price: lastPrice || 0 }, ...prev].slice(0,50))}
+                >Trigger Test Cross</button>
+              </div>
             </div>
           </div>
         </section>
@@ -94,6 +104,36 @@ export default function App() {
           </div>
         </aside>
       </main>
+    </div>
+  )
+}
+
+function ChartToggle({ livePrice, onTrade, onCross }) {
+  const [show, setShow] = useState(true)
+  return (
+    <div>
+      {!show ? (
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <button className="btn" onClick={() => setShow(true)}>Enable Chart</button>
+          <div style={{color:'var(--muted)',fontSize:13}}>Enable the EMA chart (lazy-loaded)</div>
+        </div>
+      ) : (
+        <div>
+          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+            <button className="btn" onClick={() => setShow(false)}>Disable Chart</button>
+            <div style={{color:'var(--muted)',fontSize:13}}>Chart mounted — use this to reproduce errors</div>
+          </div>
+          <Suspense fallback={<div className="meta">Loading chart...</div>}>
+            <SmallEMAChart
+              interval="1m"
+              limit={300}
+              livePrice={livePrice}
+              onTrade={onTrade}
+              onCross={onCross}
+            />
+          </Suspense>
+        </div>
+      )}
     </div>
   )
 }
