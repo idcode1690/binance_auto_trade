@@ -77,6 +77,38 @@ export default function App() {
   const change = ''
   const candles = 0
 
+  // Poll backend for Binance Futures account info (requires server running and .env set)
+  useEffect(() => {
+    let mounted = true
+    const fetchAccount = async () => {
+      try {
+        const resp = await fetch('/api/futures/account')
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+        const data = await resp.json()
+        if (!mounted) return
+        if (data && typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+          try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+          setFuturesBalanceStr(String(data.totalWalletBalance))
+        }
+        if (data && Array.isArray(data.positions) && symbol) {
+          const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+          if (p) {
+            // positionAmt may be string; convert to number-like string
+            const amt = Number(p.positionAmt) || 0
+            try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+            setHoldingsStr(String(amt))
+          }
+        }
+      } catch (err) {
+        // network or backend missing — keep current values
+        // console.debug('fetchAccount', err)
+      }
+    }
+    fetchAccount()
+    const id = setInterval(fetchAccount, 10000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [symbol])
+
   const wsRef = useRef(null)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
