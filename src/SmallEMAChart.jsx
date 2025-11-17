@@ -185,6 +185,33 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const slice = klines.slice(-viewN)
   const eShorts = emaShortArr.slice(-viewN)
   const eLongs = emaLongArr.slice(-viewN)
+  // notifiedRef + onCross effect must be declared before any early returns
+  const notifiedRef = useRef(new Set())
+  useEffect(() => {
+    if (!onCross) return
+    if (!emaShortArr || !emaLongArr) return
+    const n = Math.min(emaShortArr.length, emaLongArr.length)
+    if (n < 2) return
+    const i = n - 1
+    const aPrev = emaShortArr[i - 1]
+    const bPrev = emaLongArr[i - 1]
+    const a = emaShortArr[i]
+    const b = emaLongArr[i]
+    if (a == null || b == null || aPrev == null || bPrev == null) return
+    const prevDiff = aPrev - bPrev
+    const currDiff = a - b
+    let type = null
+    if (prevDiff <= 0 && currDiff > 0) type = 'bull'
+    else if (prevDiff >= 0 && currDiff < 0) type = 'bear'
+    if (type) {
+      const time = klines && klines.length > 0 ? klines[klines.length - 1].time : Date.now()
+      const key = `${time}:${type}`
+      if (!notifiedRef.current.has(key)) {
+        notifiedRef.current.add(key)
+        try { onCross({ type, time, price: klines[klines.length - 1].close }) } catch (e) {}
+      }
+    }
+  }, [emaShortArr, emaLongArr, onCross, klines])
 
   // ensure numeric highs/lows exist
   const highs = slice.map(s => Number(s.high)).filter(v => isFinite(v))
