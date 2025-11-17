@@ -124,7 +124,8 @@ export default function App() {
       // all attempts failed — ignore and keep local values
     }
     fetchAccount()
-    const id = setInterval(fetchAccount, 10000)
+    // Poll more frequently for testnet/private info (faster UX)
+    const id = setInterval(fetchAccount, 3000)
     return () => { mounted = false; clearInterval(id) }
   }, [symbol])
 
