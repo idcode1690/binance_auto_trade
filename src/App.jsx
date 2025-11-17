@@ -37,9 +37,11 @@ export default function App() {
   const [emaShortStr, setEmaShortStr] = useState('26')
   const [emaLongStr, setEmaLongStr] = useState('200')
   const [minutesStr, setMinutesStr] = useState('1')
+  const [symbolStr, setSymbolStr] = useState('BTCUSDT')
   const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
+  const symbol = (symbolStr && symbolStr.trim().toUpperCase()) || 'BTCUSDT'
   const price = lastPrice == null ? '' : Number(lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })
   const change = ''
   const candles = 0
@@ -68,6 +70,8 @@ export default function App() {
                 enable it step-by-step and capture any initialization errors. */}
             <div style={{marginTop: 8}}>
               <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+                <label style={{fontSize:13,color:'var(--muted)'}}>Symbol:</label>
+                <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => setSymbolStr((symbolStr||'BTCUSDT').trim().toUpperCase())} style={{width:120,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
                 <input className="theme-input" type="number" min={1} value={emaShortStr} onChange={e=>setEmaShortStr(e.target.value)} onBlur={() => setEmaShortStr(String(Math.max(1, parseInt(emaShortStr,10) || 26)))} style={{width:72,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA2:</label>
@@ -82,6 +86,7 @@ export default function App() {
                 emaShort={emaShort}
                 emaLong={emaLong}
                 minutes={minutes}
+                symbol={symbol}
               />
             </div>
           </div>
@@ -119,7 +124,7 @@ export default function App() {
   )
 }
 
-function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1 }) {
+function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
   const toBinanceInterval = (m) => {
     const n = Math.max(1, Number(m || 1))
     const map = {
@@ -145,6 +150,7 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
         onCross={onCross}
         emaShort={Number(emaShort)||26}
         emaLong={Number(emaLong)||200}
+        symbol={String(symbol || 'BTCUSDT')}
       />
     </Suspense>
   )

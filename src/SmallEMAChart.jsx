@@ -20,7 +20,7 @@ function computeEMA(values, period) {
   return out
 }
 
-export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice = null, onTrade = null, onCross = null, emaShort = 26, emaLong = 200 }) {
+export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice = null, onTrade = null, onCross = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
   const [klines, setKlines] = useState([])
   const [emaShortArr, setEmaShortArr] = useState([])
   const [emaLongArr, setEmaLongArr] = useState([])
@@ -33,7 +33,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
     async function load() {
       try {
-        const url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
+        const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
         const res = await fetch(url)
         const data = await res.json()
         const parsed = data.map(r => ({
@@ -51,7 +51,8 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     }
 
     try {
-      const streamName = `btcusdt@kline_${interval}/btcusdt@trade`
+      const symLower = String(symbol || 'BTCUSDT').toLowerCase()
+      const streamName = `${symLower}@kline_${interval}/${symLower}@trade`
       const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streamName}`
       ws = new WebSocket(wsUrl)
       ws.onmessage = (ev) => {
