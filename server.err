@@ -1,8 +1,26 @@
-futures/order error {
-  code: -4164,
-  msg: "Order's notional must be no smaller than 100 (unless you choose reduce only)."
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at Function.listen (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\express\lib\application.js:635:24)
+    at Object.<anonymous> (C:\Users\e1it3\Desktop\program\binance_auto_trade\server\index.js:357:5)
+    at Module._compile (node:internal/modules/cjs/loader:1688:14)
+    at Object..js (node:internal/modules/cjs/loader:1820:10)
+    at Module.load (node:internal/modules/cjs/loader:1423:32)
+    at Function._load (node:internal/modules/cjs/loader:1246:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
 }
-futures/order error {
-  code: -4164,
-  msg: "Order's notional must be no smaller than 100 (unless you choose reduce only)."
-}
+
+Node.js v22.18.0
