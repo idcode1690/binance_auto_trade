@@ -424,15 +424,26 @@ function PositionsList({ account }) {
                     })()}
                   </td>
                   <td>{p.leverage || '-'}</td>
-                  <td>{(() => {
-                    // Prefer explicit marginType if provided, normalize casing
-                    if (p.marginType) return String(p.marginType).toUpperCase()
-                    // Binance may provide an `isolated` boolean or `isIsolated`
-                    if (typeof p.isolated === 'boolean') return p.isolated ? 'ISOLATED' : 'CROSSED'
-                    if (typeof p.isIsolated === 'boolean') return p.isIsolated ? 'ISOLATED' : 'CROSSED'
-                    // fallback to dash
-                    return '-'
-                  })()}</td>
+                  <td>
+                    {(() => {
+                      const initial = Number(p.positionInitialMargin || 0) || 0
+                      // If we have an initial margin, show it clearly (USDT)
+                      if (initial > 0) {
+                        return (
+                          <div>
+                            <div style={{fontWeight:700}}>{fmt(initial, 4)} USDT</div>
+                            <div style={{fontSize:11,color:'var(--muted)'}}>{p.marginType ? String(p.marginType).toUpperCase() : (typeof p.isIsolated === 'boolean' ? (p.isIsolated ? 'ISOLATED' : 'CROSSED') : '-')}</div>
+                          </div>
+                        )
+                      }
+
+                      // fallback: show margin type / isolated flag if present
+                      if (p.marginType) return String(p.marginType).toUpperCase()
+                      if (typeof p.isolated === 'boolean') return p.isolated ? 'ISOLATED' : 'CROSSED'
+                      if (typeof p.isIsolated === 'boolean') return p.isIsolated ? 'ISOLATED' : 'CROSSED'
+                      return '-'
+                    })()}
+                  </td>
                 </tr>
               ))}
             </tbody>
