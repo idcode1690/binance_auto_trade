@@ -174,7 +174,6 @@ export default function App() {
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>BTC Position</div>
-                    <div style={{fontSize:12,color:'var(--muted)'}}>{`Price: ${price || '—'}`}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
                     <div style={{fontSize:16,fontWeight:600}}>{
