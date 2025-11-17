@@ -292,3 +292,12 @@ body {
 .tabs-row .tab:last-child { border-top-right-radius:8px; border-bottom-right-radius:8px }
 .tabs-row .tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
 .tab-content { max-height:360px; overflow:auto; padding-right:6px }
+
+/* Positions table styling */
+.positions-section { margin-top: 12px }
+.positions-table { width: 100%; border-collapse: collapse; font-size:13px }
+.positions-table th, .positions-table td { padding:8px 10px; text-align:left; border-bottom: 1px solid rgba(255,255,255,0.03) }
+.positions-table thead th { color: var(--muted); font-weight:700; font-size:12px }
+.positions-table tbody tr:hover { background: rgba(255,255,255,0.01) }
+.positions-table td.bull { color: var(--success); font-weight:700 }
+.positions-table td.bear { color: var(--danger); font-weight:700 }

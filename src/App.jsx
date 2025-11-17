@@ -120,6 +120,8 @@ export default function App() {
         } catch (err) {
           // try next url
         }
+                {/* Positions list shown under the chart */}
+                <PositionsList account={account} />
       }
       // all attempts failed — ignore and keep local values
     }
@@ -315,6 +317,51 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
         symbol={String(symbol || 'BTCUSDT')}
       />
     </Suspense>
+  )
+}
+
+function PositionsList({ account }) {
+  const positions = (account && Array.isArray(account.positions)) ? account.positions.filter(p => Number(p.positionAmt) && Number(p.positionAmt) !== 0) : []
+  const fmt = (v) => {
+    if (v == null) return '-'
+    const n = Number(v)
+    if (!isFinite(n)) return v
+    return n.toLocaleString(undefined, { maximumFractionDigits: 8 })
+  }
+  return (
+    <div className="positions-section" style={{marginTop:12}}>
+      <h4 style={{marginTop:0}}>Positions</h4>
+      <div className="meta">
+        {positions.length === 0 ? (
+          <div>No open positions.</div>
+        ) : (
+          <table className="positions-table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Size</th>
+                <th>Entry</th>
+                <th>Unrealized P/L</th>
+                <th>Leverage</th>
+                <th>Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {positions.map(p => (
+                <tr key={p.symbol}>
+                  <td>{p.symbol}</td>
+                  <td className={Number(p.positionAmt) > 0 ? 'bull' : 'bear'}>{fmt(p.positionAmt)}</td>
+                  <td>{fmt(p.entryPrice)}</td>
+                  <td className={Number(p.unrealizedProfit) >= 0 ? 'bull' : 'bear'}>{fmt(p.unrealizedProfit)}</td>
+                  <td>{p.leverage || '-'}</td>
+                  <td>{p.marginType || (p.isIsolated ? 'ISOLATED' : 'CROSSED') || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   )
 }
 
