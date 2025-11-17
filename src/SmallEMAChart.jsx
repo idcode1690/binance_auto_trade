@@ -186,6 +186,21 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const [viewCount, setViewCount] = useState(120)
   const minView = 10
   const maxView = Math.max(minView, limit)
+  const initialZoomAppliedRef = useRef(false)
+
+  // Apply an initial zoom equivalent to 10 wheel steps once klines load.
+  useEffect(() => {
+    const points = klines.length
+    if (initialZoomAppliedRef.current) return
+    if (!points || points <= 0) return
+    // determine a typical wheel step for the current viewCount
+    const base = Math.min(viewCount, Math.max(minView, points))
+    const step = Math.max(1, Math.round(base * 0.12))
+    const delta = step * 10 // 10 wheel steps
+    const next = Math.max(minView, base - delta)
+    if (next !== viewCount) setViewCount(next)
+    initialZoomAppliedRef.current = true
+  }, [klines, viewCount, minView])
 
   const viewN = Math.min(points, viewCount)
   const slice = klines.slice(-viewN)

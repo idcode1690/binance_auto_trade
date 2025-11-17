@@ -6,14 +6,22 @@ import React, { useEffect, useRef, useState, Suspense } from 'react'
 
 const SmallEMAChart = React.lazy(() => import('./SmallEMAChart'))
 
-function Hero({ title, subtitle }) {
+function Hero({ title, subtitle, isFullscreen, onToggleFullscreen }) {
   return (
-    <header className="hero">
+    <header className="hero header">
       <div>
         <h1 className="hero-title">{title}</h1>
         <p className="hero-sub">{subtitle}</p>
       </div>
-      {/* Auto-connect enabled; no manual Connect button */}
+      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <button
+          className="btn secondary fullscreen-btn"
+          onClick={() => onToggleFullscreen && onToggleFullscreen(!isFullscreen)}
+          title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+          {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+        </button>
+      </div>
     </header>
   )
 }
@@ -34,6 +42,7 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [alerts, setAlerts] = useState([])
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [holdingsStr, setHoldingsStr] = useState(() => {
     try { return localStorage.getItem('holdings') || '0' } catch (e) { return '0' }
   })
@@ -125,9 +134,39 @@ export default function App() {
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
 
+  // Fullscreen handling: keep state in sync and toggle body class for styling
+  useEffect(() => {
+    const onFsChange = () => {
+      const fs = !!(document.fullscreenElement)
+      setIsFullscreen(fs)
+      try {
+        if (fs) document.body.classList.add('app-fullscreen')
+        else document.body.classList.remove('app-fullscreen')
+      } catch (e) {}
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
+  const toggleFullscreen = async (next) => {
+    try {
+      const want = typeof next === 'boolean' ? next : !isFullscreen
+      if (want) {
+        const el = document.documentElement
+        if (el.requestFullscreen) await el.requestFullscreen()
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen()
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
+      }
+    } catch (e) {
+      console.warn('Fullscreen change failed', e)
+    }
+  }
+
   return (
     <div className="container body-root">
-      <Hero title="Binance BTC/USDT" />
+      <Hero title="Binance BTC/USDT" isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen} />
 
       <main className="main-grid">
         <section className="main-chart card">
