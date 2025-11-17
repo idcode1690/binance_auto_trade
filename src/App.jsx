@@ -241,8 +241,8 @@ export default function App() {
                                 ) : '—'}
                               </div>
                               <div style={{flex:1,textAlign:'right'}}>
-                                <span style={{color:pnlColor,fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</span>
-                                <div style={{fontSize:12,color:pnlColor}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
+                                <div style={{fontWeight:700,color:pnlColor}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</div>
+                                <div style={{fontSize:12,fontWeight:600,color:pnlColor}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
                               </div>
                               <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
                             </div>
