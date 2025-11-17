@@ -30,6 +30,10 @@ export default function App() {
   const wsRef = useRef(null)
   const currentCandleRef = useRef(null)
 
+  // TradingView diagnostics state (visible fallback if script blocked)
+  const [tvLoaded, setTvLoaded] = useState(false)
+  const [tvError, setTvError] = useState(null)
+
   // EMA smoothing factors for period counts (periods are number of 5-min candles)
   const alpha26 = 2 / (26 + 1)
   const alpha200 = 2 / (200 + 1)
@@ -151,6 +155,69 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ema26, ema200])
 
+  // TradingView load effect: initialize widget or fall back to internal chart
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const id = 'tradingview_chart'
+    if (window.TradingView) {
+      try {
+        new window.TradingView.widget({
+          container_id: id,
+          width: '100%',
+          height: 360,
+          symbol: 'BINANCE:BTCUSDT',
+          interval: '5',
+          timezone: 'Etc/UTC',
+          theme: 'dark',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: '#111827',
+          enable_publishing: false,
+          allow_symbol_change: true,
+        })
+        setTvLoaded(true)
+      } catch (e) {
+        console.warn('TradingView init error', e)
+        setTvError(String(e))
+      }
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://s3.tradingview.com/tv.js'
+    script.type = 'text/javascript'
+    script.onload = () => {
+      try {
+        new window.TradingView.widget({
+          container_id: id,
+          width: '100%',
+          height: 360,
+          symbol: 'BINANCE:BTCUSDT',
+          interval: '5',
+          timezone: 'Etc/UTC',
+          theme: 'dark',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: '#111827',
+          enable_publishing: false,
+          allow_symbol_change: true,
+        })
+        setTvLoaded(true)
+      } catch (e) {
+        console.warn('TradingView init error', e)
+        setTvError(String(e))
+      }
+    }
+    script.onerror = (e) => {
+      console.warn('TradingView script load failed', e)
+      setTvError('script-load-failed')
+    }
+    document.head.appendChild(script)
+    return () => {
+      // keep script in DOM; removing may cause other issues
+    }
+  }, [])
+
   return (
     <div className="container">
       <h2>Binance BTC/USDT — 5m Candles + EMA26/200</h2>
@@ -171,7 +238,28 @@ export default function App() {
       </div>
 
       <div className="card">
-        <div id="tradingview_chart" style={{width:'100%', height:360}}></div>
+        {/* Show TradingView if loaded, otherwise show a visible fallback chart and diagnostics */}
+        {tvLoaded && !tvError ? (
+          <div id="tradingview_chart" style={{width:'100%', height:360}} />
+        ) : (
+          <div>
+            <div style={{marginBottom:8}}>
+              <strong>Chart:</strong>
+              {tvLoaded ? (
+                <span style={{marginLeft:8, color:'#9ca3af'}}>TradingView initialized</span>
+              ) : tvError ? (
+                <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
+              ) : (
+                <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
+              )}
+            </div>
+            <CandlestickChart data={candles} height={360} />
+            <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
+              If the chart is blank, open DevTools → Console/Network to check for errors or blocked
+              external scripts (TradingView). This page will show a fallback candlestick chart.
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -193,60 +281,6 @@ export default function App() {
     </div>
   )
 }
-
-// Load TradingView widget script and create 5m chart
-useEffect(() => {
-  // This effect runs only in browser; ensure window exists
-  if (typeof window === 'undefined') return
-  const id = 'tradingview_chart'
-  // avoid re-creating if widget already exists
-  if (window.TradingView) {
-    try {
-      new window.TradingView.widget({
-        container_id: id,
-        width: '100%',
-        height: 360,
-        symbol: 'BINANCE:BTCUSDT',
-        interval: '5',
-        timezone: 'Etc/UTC',
-        theme: 'dark',
-        style: '1',
-        locale: 'en',
-        toolbar_bg: '#111827',
-        enable_publishing: false,
-        allow_symbol_change: true,
-      })
-    } catch (e) { console.warn('TradingView init error', e) }
-    return
-  }
-
-  const script = document.createElement('script')
-  script.src = 'https://s3.tradingview.com/tv.js'
-  script.type = 'text/javascript'
-  script.onload = () => {
-    try {
-      new window.TradingView.widget({
-        container_id: id,
-        width: '100%',
-        height: 360,
-        symbol: 'BINANCE:BTCUSDT',
-        interval: '5',
-        timezone: 'Etc/UTC',
-        theme: 'dark',
-        style: '1',
-        locale: 'en',
-        toolbar_bg: '#111827',
-        enable_publishing: false,
-        allow_symbol_change: true,
-      })
-    } catch (e) { console.warn('TradingView init error', e) }
-  }
-  script.onerror = (e) => console.warn('TradingView script load failed', e)
-  document.head.appendChild(script)
-  return () => {
-    // do not remove script to avoid breaking other components
-  }
-}, [])
 
 function CandlestickChart({ data = [], height = 360 }) {
   const ref = useRef(null)
