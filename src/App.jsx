@@ -34,6 +34,9 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [alerts, setAlerts] = useState([])
+  const [holdingsStr, setHoldingsStr] = useState(() => {
+    try { return localStorage.getItem('holdings') || '0' } catch (e) { return '0' }
+  })
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
   })
@@ -66,6 +69,8 @@ export default function App() {
     return n.toLocaleString(undefined, { maximumFractionDigits: maxDigits })
   }
   const price = formatPrice(lastPrice)
+  const holdings = Number(holdingsStr) || 0
+  const value = isFinite(Number(lastPrice)) ? holdings * Number(lastPrice) : null
   const change = ''
   const candles = 0
 
@@ -117,6 +122,19 @@ export default function App() {
 
         <aside className="sidebar card">
           <div className="sidebar-inner">
+            <h3 style={{marginTop:0}}>Assets</h3>
+            <div className="meta">
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600}}>BTC Holdings</div>
+                  <div style={{fontSize:12,color:'var(--muted)'}}>{`Price: ${price || '—'}`}</div>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
+                  <input className="theme-input" type="number" min={0} step="any" value={holdingsStr} onChange={e=>setHoldingsStr(e.target.value)} onBlur={() => { const v = String(Number(holdingsStr) || 0); setHoldingsStr(v); try { localStorage.setItem('holdings', v) } catch(e){} }} style={{width:80,padding:6,borderRadius:6,textAlign:'right'}} />
+                  <div style={{fontSize:13}}>{value == null ? 'Value: —' : `Value: ${formatPrice(value)} USDT`}</div>
+                </div>
+              </div>
+            </div>
             <h3 style={{marginTop:0}}>Cross Alerts</h3>
             <div className="meta">
               {alerts && alerts.length > 0 ? (
