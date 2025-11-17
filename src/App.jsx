@@ -225,7 +225,8 @@ export default function App() {
                             const usedMargin = notional / lev
                             if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
                           }
-                          const pnlColor = upl >= 0 ? 'var(--bull)' : 'var(--bear)'
+                          const isPos = upl >= 0
+                          const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
                           return (
                             <div key={p.symbol} style={{display:'flex',padding:'8px 10px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
                               <div style={{flex:1.2}}>{p.symbol}</div>
@@ -240,9 +241,9 @@ export default function App() {
                                   </div>
                                 ) : '—'}
                               </div>
-                              <div style={{flex:1,textAlign:'right'}}>
-                                <div style={{fontWeight:700,color:pnlColor}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</div>
-                                <div style={{fontSize:12,fontWeight:600,color:pnlColor}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
+                              <div className={"pnl-cell " + pnlClass} style={{flex:1,textAlign:'right'}}>
+                                <div className="pnl-amount">{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</div>
+                                <div className="pnl-percent">{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
                               </div>
                               <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
                             </div>
