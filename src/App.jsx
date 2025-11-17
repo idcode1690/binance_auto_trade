@@ -498,62 +498,21 @@ function CandlestickChart({ data = [], height = 360 }) {
           )
         })}
 
-        {/* EMA lines */}
+        {/* EMA lines (closed EMAs only) */}
         {(() => {
-          // closed EMA polylines
           const points26 = []
           const points200 = []
-          // live EMA polylines (prefer _liveEma if present, otherwise fall back to closed ema for continuity)
-          const live26 = []
-          const live200 = []
-
           data.forEach((d, i) => {
             const x = pad + i * (barWidth + gap) + Math.floor(barWidth/2)
             if (d.ema26 != null) points26.push([x, yFor(d.ema26)])
             if (d.ema200 != null) points200.push([x, yFor(d.ema200)])
-
-            // build live series: prefer closed EMA for historical points. For the
-            // most-recent candle use intra-bar interpolation between the closed
-            // EMA and the tick-based _liveEma according to _progress (0..1).
-            const isLast = i === data.length - 1
-            let v26 = null
-            let v200 = null
-            if (isLast && d._liveEma26 != null) {
-              if (d.ema26 != null && typeof d._progress === 'number') {
-                v26 = d.ema26 * (1 - d._progress) + d._liveEma26 * d._progress
-              } else {
-                v26 = d._liveEma26
-              }
-            } else if (d.ema26 != null) {
-              v26 = d.ema26
-            }
-
-            if (isLast && d._liveEma200 != null) {
-              if (d.ema200 != null && typeof d._progress === 'number') {
-                v200 = d.ema200 * (1 - d._progress) + d._liveEma200 * d._progress
-              } else {
-                v200 = d._liveEma200
-              }
-            } else if (d.ema200 != null) {
-              v200 = d.ema200
-            }
-            if (v26 != null) live26.push([x, yFor(v26)])
-            if (v200 != null) live200.push([x, yFor(v200)])
           })
-
           const path26 = points26.map(p => p.join(',')).join(' ')
           const path200 = points200.map(p => p.join(',')).join(' ')
-          const livePath26 = live26.map(p => p.join(',')).join(' ')
-          const livePath200 = live200.map(p => p.join(',')).join(' ')
-
           return (
             <g>
               {points26.length > 0 && <polyline points={path26} fill="none" stroke="#60a5fa" strokeWidth={3} strokeLinecap="round" />}
               {points200.length > 0 && <polyline points={path200} fill="none" stroke="#f97316" strokeWidth={3} strokeLinecap="round" />}
-
-              {/* live EMA overlays: dashed, thinner, brighter */}
-              {livePath26.length > 0 && <polyline points={livePath26} fill="none" stroke="#93c5fd" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />}
-              {livePath200.length > 0 && <polyline points={livePath200} fill="none" stroke="#ffb27a" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />}
             </g>
           )
         })()}
