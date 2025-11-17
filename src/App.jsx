@@ -129,6 +129,41 @@ export default function App() {
     return () => { mounted = false; clearInterval(id) }
   }, [symbol])
 
+  // Subscribe to server-sent account updates for near-real-time positions
+  useEffect(() => {
+    let es
+    try {
+      es = new EventSource('/api/futures/sse')
+    } catch (e) {
+      return
+    }
+    const onAccount = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data) {
+          setAccount(data)
+          if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+            try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+            setFuturesBalanceStr(String(data.totalWalletBalance))
+          }
+          if (Array.isArray(data.positions) && symbol) {
+            const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+            if (p) {
+              const amt = Number(p.positionAmt) || 0
+              try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+              setHoldingsStr(String(amt))
+            }
+          }
+        }
+      } catch (err) {}
+    }
+    es.addEventListener('account', onAccount)
+    es.onerror = () => {
+      try { es.close() } catch (e) {}
+    }
+    return () => { try { es.close() } catch (e) {} }
+  }, [symbol])
+
   const wsRef = useRef(null)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade

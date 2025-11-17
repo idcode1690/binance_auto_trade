@@ -99,6 +99,70 @@ app.get('/api/config', (req, res) => {
   })
 })
 
+// Server-Sent Events endpoint to stream account updates (polled) to the frontend.
+// This provides near-real-time updates for positions without requiring the frontend
+// to manage Binance user data websockets.
+app.get('/api/futures/sse', async (req, res) => {
+  if (!API_KEY || !API_SECRET) {
+    res.status(400).json({ error: 'Missing API keys on server' })
+    return
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive'
+  })
+
+  let lastSnapshot = null
+  let closed = false
+
+  const send = (evt, data) => {
+    try {
+      res.write(`event: ${evt}\n`)
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    } catch (e) {
+      // ignore write errors
+    }
+  }
+
+  const poll = async () => {
+    if (closed) return
+    try {
+      const data = await signedGet('/fapi/v2/account')
+      // Create a small payload
+      const out = {
+        totalWalletBalance: data.totalWalletBalance || null,
+        totalUnrealizedProfit: data.totalUnrealizedProfit || null,
+        positions: Array.isArray(data.positions) ? data.positions.map(p => ({
+          symbol: p.symbol,
+          positionAmt: p.positionAmt,
+          entryPrice: p.entryPrice,
+          unrealizedProfit: p.unRealizedProfit || p.unrealizedProfit || 0,
+          leverage: p.leverage,
+          marginType: p.marginType
+        })) : []
+      }
+      const snap = JSON.stringify(out)
+      if (snap !== lastSnapshot) {
+        lastSnapshot = snap
+        send('account', out)
+      }
+    } catch (err) {
+      console.error('sse poll error', err && err.response ? err.response.data : err.message)
+    }
+  }
+
+  // initial poll
+  poll()
+  const id = setInterval(poll, 2000)
+
+  req.on('close', () => {
+    closed = true
+    clearInterval(id)
+  })
+})
+
 app.post('/api/futures/order', async (req, res) => {
   try {
     const { symbol, side, type, quantity, price, reduceOnly, positionSide } = req.body || {}
