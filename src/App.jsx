@@ -80,29 +80,36 @@ export default function App() {
   // Poll backend for Binance Futures account info (requires server running and .env set)
   useEffect(() => {
     let mounted = true
+    const backendUrls = [
+      'http://127.0.0.1:3000/api/futures/account',
+      '/api/futures/account'
+    ]
     const fetchAccount = async () => {
-      try {
-        const resp = await fetch('/api/futures/account')
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const data = await resp.json()
-        if (!mounted) return
-        if (data && typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-          try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-          setFuturesBalanceStr(String(data.totalWalletBalance))
-        }
-        if (data && Array.isArray(data.positions) && symbol) {
-          const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-          if (p) {
-            // positionAmt may be string; convert to number-like string
-            const amt = Number(p.positionAmt) || 0
-            try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-            setHoldingsStr(String(amt))
+      for (const url of backendUrls) {
+        try {
+          const resp = await fetch(url)
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+          const data = await resp.json()
+          if (!mounted) return
+          if (data && typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+            try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+            setFuturesBalanceStr(String(data.totalWalletBalance))
           }
+          if (data && Array.isArray(data.positions) && symbol) {
+            const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+            if (p) {
+              const amt = Number(p.positionAmt) || 0
+              try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+              setHoldingsStr(String(amt))
+            }
+          }
+          // success — stop trying other urls
+          return
+        } catch (err) {
+          // try next url
         }
-      } catch (err) {
-        // network or backend missing — keep current values
-        // console.debug('fetchAccount', err)
       }
+      // all attempts failed — ignore and keep local values
     }
     fetchAccount()
     const id = setInterval(fetchAccount, 10000)
