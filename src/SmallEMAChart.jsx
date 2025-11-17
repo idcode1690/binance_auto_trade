@@ -244,8 +244,14 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   }
   const max = Math.max(...highs)
   const min = Math.min(...lows)
-  const xStep = (width - padding * 2) / (viewN - 1 || 1)
-  const barW = Math.max(1, xStep * 0.6)
+  // compute xStep and bar width, then ensure there is extra right padding
+  // so the rightmost candle body isn't clipped by the SVG edge.
+  let xStep = (width - padding * 2) / (viewN - 1 || 1)
+  let barW = Math.max(1, xStep * 0.6)
+  const padLeft = padding
+  const padRight = Math.max(padding, Math.ceil(barW / 2) + 1)
+  xStep = (width - padLeft - padRight) / (viewN - 1 || 1)
+  barW = Math.max(1, xStep * 0.6)
 
   const yFor = v => padding + (1 - (v - min) / (max - min || 1)) * (height - padding * 2)
 
@@ -290,10 +296,10 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   return (
     <div onWheel={handleWheel} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{width: '100%', height: height}}>
-        {slice.map((c, i) => {
+          {slice.map((c, i) => {
           // skip invalid candle data
           if (![c.open, c.high, c.low, c.close].every(x => isFinite(Number(x)))) return null
-          const x = padding + i * xStep
+            const x = padLeft + i * xStep
           const highY = yFor(c.high)
           const lowY = yFor(c.low)
           const openY = yFor(c.open)
