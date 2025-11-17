@@ -38,10 +38,10 @@ export default function App() {
     try { return localStorage.getItem('autoOrderEnabled') === 'true' } catch (e) { return false }
   })
   // Test order UI removed per request
-  const [orders, setOrders] = useState(() => {
-    try { const raw = localStorage.getItem('orders'); return raw ? JSON.parse(raw) : [] } catch (e) { return [] }
-  })
-  const [activeTab, setActiveTab] = useState('alerts') // 'alerts' or 'orders'
+    const [orders, setOrders] = useState(() => {
+      try { const raw = localStorage.getItem('orders'); return raw ? JSON.parse(raw) : [] } catch (e) { return [] }
+    })
+    const [activeTab, setActiveTab] = useState('alerts') // kept for compatibility but unused
   const [holdingsStr, setHoldingsStr] = useState(() => {
     try { return localStorage.getItem('holdings') || '0' } catch (e) { return '0' }
   })
@@ -164,7 +164,29 @@ export default function App() {
               <ChartToggle
                 livePrice={lastPrice}
                 onTrade={setLastPrice}
-                onCross={(c) => setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 50))}
+                onCross={(c) => {
+                  // add cross alert
+                  setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 200))
+                  try {
+                    // create a simulated order entry on cross so right column shows it
+                    const side = c.type === 'bull' ? 'BUY' : 'SELL'
+                    const usdt = 100 // default simulated USDT allocation
+                    const priceNum = Number(c.price) || Number(lastPrice) || 0
+                    let qty = 0
+                    if (priceNum > 0) qty = Math.floor((usdt / priceNum) * 1e6) / 1e6
+                    const orderEntry = {
+                      id: Date.now(),
+                      symbol: String(symbol || 'BTCUSDT'),
+                      side,
+                      quantity: qty > 0 ? String(qty) : '0',
+                      usdt,
+                      time: c.time || Date.now(),
+                      status: 'simulated',
+                      source: 'cross'
+                    }
+                    setOrders(prev => { const next = [orderEntry, ...prev].slice(0, 200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
+                  } catch (e) {}
+                }}
                 emaShort={emaShort}
                 emaLong={emaLong}
                 minutes={minutes}
@@ -204,54 +226,57 @@ export default function App() {
             </div>
 
             <div style={{marginTop:12}}>
-              <div style={{display:'flex',gap:8,marginBottom:8}}>
-                <button className={"tab " + (activeTab === 'alerts' ? 'active' : '')} onClick={() => setActiveTab('alerts')}>Cross Alerts</button>
-                <button className={"tab " + (activeTab === 'orders' ? 'active' : '')} onClick={() => setActiveTab('orders')}>Orders</button>
-              </div>
-              <div className="meta">
-                {activeTab === 'alerts' ? (
-                  (alerts && alerts.length > 0) ? (
-                    <ul className="alerts">
-                      {alerts.map(a => (
-                        <li key={a.id} className="alert-item">
-                          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-                            <div>
-                              <strong className={a.type === 'bull' ? 'bull' : (a.type === 'bear' ? 'bear' : '')}>
-                                {a.type === 'bull' ? 'Bull' : (a.type === 'bear' ? 'Bear' : (a.type === 'order' ? 'Order' : (a.type === 'sim' ? 'Sim' : 'Info')))}
-                              </strong>
-                              <div style={{fontSize:12,color:'var(--muted)'}}>
-                                {new Date(a.time).toLocaleString()} — {a.price ? Number(a.price).toLocaleString(undefined,{maximumFractionDigits:2}) : ''}
-                                <div style={{fontSize:11,color:'var(--muted)'}}>{a.msg}</div>
+              {/* Combined Cross (left) / Orders (right) view */}
+              <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+                <div style={{flex:1}}>
+                  <h4 style={{marginTop:0}}>Cross Alerts</h4>
+                  <div className="meta">
+                    {(alerts && alerts.length > 0) ? (
+                      <ul className="alerts">
+                        {alerts.map(a => (
+                          <li key={a.id} className="alert-item">
+                            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                              <div>
+                                <strong className={a.type === 'bull' ? 'bull' : (a.type === 'bear' ? 'bear' : '')}>
+                                  {a.type === 'bull' ? 'Bull' : (a.type === 'bear' ? 'Bear' : 'Info')}
+                                </strong>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>
+                                  {new Date(a.time).toLocaleString()} — {a.price ? Number(a.price).toLocaleString(undefined,{maximumFractionDigits:2}) : ''}
+                                  <div style={{fontSize:11,color:'var(--muted)'}}>{a.msg}</div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : ('No alerts yet.')
-                ) : (
-                  // orders tab
-                  (orders && orders.length > 0) ? (
-                    <ul className="orders-list">
-                      {orders.map(o => (
-                        <li key={o.id} className="alert-item">
-                          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-                            <div>
-                              <strong className={o.side === 'BUY' ? 'bull' : 'bear'}>{o.side} {o.symbol}</strong>
-                              <div style={{fontSize:12,color:'var(--muted)'}}>
-                                {new Date(o.time).toLocaleString()} — qty: {o.quantity} — usdt: {o.usdt}
-                                {o.response ? <div style={{fontSize:11,color:'var(--muted)'}}>resp: {JSON.stringify(o.response)}</div> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : ('No alerts yet.')}
+                  </div>
+                </div>
+                <div style={{flex:1}}>
+                  <h4 style={{marginTop:0}}>Orders / Results</h4>
+                  <div className="meta">
+                    {(orders && orders.length > 0) ? (
+                      <ul className="orders-list">
+                        {orders.map(o => (
+                          <li key={o.id} className="alert-item">
+                            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                              <div>
+                                <strong className={o.side === 'BUY' ? 'bull' : 'bear'}>{o.side} {o.symbol}</strong>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>
+                                  {new Date(o.time).toLocaleString()} — qty: {o.quantity} — usdt: {o.usdt}
+                                  {o.response ? <div style={{fontSize:11,color:'var(--muted)'}}>resp: {JSON.stringify(o.response)}</div> : null}
+                                </div>
+                              </div>
+                              <div style={{textAlign:'right'}}>
+                                <div style={{fontSize:13,fontWeight:700}}>{o.status}</div>
                               </div>
                             </div>
-                            <div style={{textAlign:'right'}}>
-                              <div style={{fontSize:13,fontWeight:700}}>{o.status}</div>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : ('No orders yet.')
-                )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : ('No orders yet.')}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
