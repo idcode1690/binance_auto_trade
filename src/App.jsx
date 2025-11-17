@@ -407,10 +407,34 @@ function CandlestickChart({ data = [], height = 360 }) {
   const points26 = []
   const points200 = []
 
+  // price ticks (right axis)
+  const ticks = 4
+  const priceTicks = []
+  for (let t = 0; t <= ticks; t++) {
+    const v = min + (range * (t / ticks))
+    priceTicks.push(v)
+  }
+
+  const timeLabelStep = Math.max(1, Math.floor(data.length / 6))
+
   return (
     <div ref={ref} style={{width:'100%'}}>
       <svg width="100%" height={h} viewBox={`0 0 ${logicalWidth} ${h}`} preserveAspectRatio="none">
-        <rect x={0} y={0} width={logicalWidth} height={h} fill="#041327" />
+        <rect x={0} y={0} width={logicalWidth} height={h} fill="#071127" />
+
+        {/* horizontal grid + right price labels */}
+        {priceTicks.map((pv, idx) => {
+          const y = yFor(pv)
+          const label = Number(pv).toLocaleString(undefined, {maximumFractionDigits:2})
+          return (
+            <g key={'g'+idx}>
+              <line x1={pad} x2={logicalWidth - pad} y1={y} y2={y} stroke="rgba(255,255,255,0.03)" strokeWidth={0.6} />
+              <text x={logicalWidth - pad + 6} y={y + 4} fontSize={10} fill="#dbe9f5">{label}</text>
+            </g>
+          )
+        })}
+
+        {/* candles */}
         {data.map((d, i) => {
           const x = pad + i * unit
           const openY = yFor(d.open)
@@ -420,7 +444,7 @@ function CandlestickChart({ data = [], height = 360 }) {
           const bodyTop = Math.min(openY, closeY)
           const bodyHeight = Math.max(0.5, Math.abs(closeY - openY))
           const up = d.close >= d.open
-          const color = up ? '#26a69a' : '#ff4d4f'
+          const color = up ? 'var(--success)' : 'var(--danger)'
           // wick x center
           const centerX = x + barUnit / 2
           // collect EMA polyline points
@@ -428,14 +452,24 @@ function CandlestickChart({ data = [], height = 360 }) {
           if (d.ema200 != null) points200.push([centerX, yFor(d.ema200)])
           return (
             <g key={d.time}>
-              <line x1={centerX} x2={centerX} y1={highY} y2={lowY} stroke={color} strokeWidth={0.5} />
-              <rect x={x} y={bodyTop} width={barUnit} height={bodyHeight} fill={color} />
+              <line x1={centerX} x2={centerX} y1={highY} y2={lowY} stroke={color} strokeWidth={0.8} strokeLinecap="round" />
+              <rect x={x} y={bodyTop} width={barUnit} height={bodyHeight} fill={color} rx={0.6} />
             </g>
           )
         })}
 
-        {points26.length > 0 && <polyline points={points26.map(p => p.join(',')).join(' ')} fill="none" stroke="#f3b000" strokeWidth={1.2} strokeLinecap="round" />}
-        {points200.length > 0 && <polyline points={points200.map(p => p.join(',')).join(' ')} fill="none" stroke="#ff7a00" strokeWidth={1.2} strokeLinecap="round" />}
+        {/* EMA lines */}
+        {points26.length > 0 && <polyline points={points26.map(p => p.join(',')).join(' ')} fill="none" stroke="#f3b000" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+        {points200.length > 0 && <polyline points={points200.map(p => p.join(',')).join(' ')} fill="none" stroke="#ff7a00" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+
+        {/* time axis labels */}
+        {data.map((d, i) => {
+          if (i % timeLabelStep !== 0) return null
+          const x = pad + i * unit + barUnit / 2
+          const dt = new Date(d.time * 1000)
+          const label = dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+          return <text key={'t'+i} x={x} y={h - 4} fontSize={10} fill="#9aa6b2" textAnchor="middle">{label}</text>
+        })}
       </svg>
     </div>
   )
@@ -450,78 +484,95 @@ function LightweightChart({ data = [], height = 360 }) {
   const ema200RefSeries = useRef(null)
 
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    // create chart safely; if the library returns an unexpected value, fall back
-    let initTimer = null
-    try {
-      initTimer = setTimeout(() => {
-        try {
-          const chart = createChart(el, {
-            width: Math.max(420, el.clientWidth || 0),
-            height: height,
-            layout: { background: { color: '#071127' }, textColor: '#dbe9f5', fontSize: 12 },
-            grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
-            rightPriceScale: { visible: true, borderColor: 'rgba(255,255,255,0.03)', scaleMargins: { top: 0.08, bottom: 0.08 } },
-            timeScale: { borderColor: 'rgba(255,255,255,0.03)', timeVisible: true, secondsVisible: false, rightOffset: 6 },
-            crosshair: { mode: 1, vertLine: { color: 'rgba(255,255,255,0.06)', width: 1 }, horzLine: { color: 'rgba(255,255,255,0.06)', width: 1 } },
-          })
+    let mounted = true
+    let ro = null
+    let chart = null
+    let created = false
 
-      // defensive: ensure returned object is a lightweight-charts chart
-      if (!chart || typeof chart.addCandlestickSeries !== 'function') {
-        console.warn('lightweight-charts createChart did not return a chart instance, using SVG fallback')
-        setUseFallback(true)
+    const maxRetries = 8
+    const retryDelay = 150
+
+    // wait for the container to have layout size and then try to initialize the chart
+    const tryInit = async (attempt = 0) => {
+      if (!mounted) return
+      const el = ref.current
+      if (!el) return
+
+      const w = el.clientWidth || el.offsetWidth || 0
+      const hEl = el.clientHeight || el.offsetHeight || 0
+      if (w <= 0 || hEl <= 0) {
+        if (attempt >= maxRetries) {
+          console.warn('LightweightChart: container has no size after retries, using SVG fallback')
+          if (mounted) setUseFallback(true)
+          return
+        }
+        setTimeout(() => tryInit(attempt + 1), retryDelay)
         return
       }
 
-      chartRef.current = chart
+      try {
+        chart = createChart(el, {
+          width: Math.max(420, w),
+          height: Math.max(300, height || hEl),
+          layout: { background: { color: '#071127' }, textColor: '#dbe9f5', fontSize: 12 },
+          grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+          rightPriceScale: { visible: true, borderColor: 'rgba(255,255,255,0.03)', scaleMargins: { top: 0.08, bottom: 0.08 } },
+          timeScale: { borderColor: 'rgba(255,255,255,0.03)', timeVisible: true, secondsVisible: false, rightOffset: 6 },
+          crosshair: { mode: 1, vertLine: { color: 'rgba(255,255,255,0.06)', width: 1 }, horzLine: { color: 'rgba(255,255,255,0.06)', width: 1 } },
+        })
 
-          const candleSeries = chart.addCandlestickSeries({
-            upColor: '#26a69a', downColor: '#ff4d4f', wickUpColor: '#26a69a', wickDownColor: '#ff4d4f', borderVisible: true, wickVisible: true
-          })
-      candleSeriesRef.current = candleSeries
-
-      const e26 = chart.addLineSeries({ color: '#f3b000', lineWidth: 2 })
-      const e200 = chart.addLineSeries({ color: '#ff7a00', lineWidth: 2 })
-      ema26RefSeries.current = e26
-      ema200RefSeries.current = e200
-
-      // resize observer
-          const ro = new ResizeObserver(() => {
-            if (!el) return
-            chart.applyOptions({ width: el.clientWidth, height: height })
-            try { chart.timeScale().fitContent() } catch (e) {}
-          })
-      ro.observe(el)
-
-          chartRef.current = chart
-
-          returnCleanup = () => {
-            try { ro.disconnect() } catch (e) {}
-            try { chart.remove() } catch (e) {}
-            chartRef.current = null
-            candleSeriesRef.current = null
-            ema26RefSeries.current = null
-            ema200RefSeries.current = null
-          }
-        } catch (errInner) {
-          console.warn('failed to initialize lightweight-charts (inner), will fallback', errInner)
-          setUseFallback(true)
+        if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+          throw new Error('createChart did not return required API')
         }
-      }, 60)
-    } catch (err) {
-      console.warn('failed to initialize lightweight-charts, using SVG fallback', err)
-      setUseFallback(true)
-      return
+
+        // create series
+        const candleSeries = chart.addCandlestickSeries({
+          upColor: '#26a69a', downColor: '#ff4d4f', wickUpColor: '#26a69a', wickDownColor: '#ff4d4f', borderVisible: true, wickVisible: true
+        })
+        const e26 = chart.addLineSeries({ color: '#f3b000', lineWidth: 2 })
+        const e200 = chart.addLineSeries({ color: '#ff7a00', lineWidth: 2 })
+
+        // observe resize
+        ro = new ResizeObserver(() => {
+          const el2 = ref.current
+          if (!el2 || !chart) return
+          try { chart.applyOptions({ width: Math.max(420, el2.clientWidth || 0), height: Math.max(300, el2.clientHeight || 0) }) } catch (e) {}
+        })
+        ro.observe(el)
+
+        // store refs
+        chartRef.current = chart
+        candleSeriesRef.current = candleSeries
+        ema26RefSeries.current = e26
+        ema200RefSeries.current = e200
+
+        created = true
+        // initial fit
+        try { chart.timeScale().fitContent() } catch (e) {}
+      } catch (err) {
+        try { if (chart && typeof chart.remove === 'function') chart.remove() } catch (e) {}
+        chart = null
+        if (attempt < maxRetries) {
+          setTimeout(() => tryInit(attempt + 1), retryDelay)
+        } else {
+          console.warn('LightweightChart initialization failed after retries, falling back to SVG', err)
+          if (mounted) setUseFallback(true)
+        }
+      }
     }
-    // cleanup handler variable (reassigned inside init)
-    let returnCleanup = null
+
+    tryInit(0)
 
     return () => {
-      if (initTimer) try { clearTimeout(initTimer) } catch (e) {}
-      if (returnCleanup) try { returnCleanup() } catch (e) {}
+      mounted = false
+      try { if (ro) ro.disconnect() } catch (e) {}
+      try { if (chart && typeof chart.remove === 'function') chart.remove() } catch (e) {}
+      chartRef.current = null
+      candleSeriesRef.current = null
+      ema26RefSeries.current = null
+      ema200RefSeries.current = null
     }
-  }, [])
+  }, [height])
 
   // update series when data changes
   useEffect(() => {
@@ -560,6 +611,11 @@ function LightweightChart({ data = [], height = 360 }) {
       console.warn('lightweight update failed', err)
     }
   }, [data, useFallback, height])
+
+  if (useFallback) {
+    // Render the internal SVG candlestick chart when lightweight-charts isn't available
+    return <div style={{width:'100%', height: '100%'}}><CandlestickChart data={data} height={height} /></div>
+  }
 
   return <div ref={ref} style={{width:'100%', height: '100%'}} />
 }
