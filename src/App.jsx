@@ -257,11 +257,11 @@ export default function App() {
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>Futures USDT Balance</div>
-                    <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>{account && Number.isFinite(Number(account.totalWalletBalance)) ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{Number.isFinite(Number(account && account.totalWalletBalance)) ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
-                    <div style={{fontSize:13}}>{Number.isFinite(Number(account && account.totalUnrealizedProfit)) ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
+                    <div style={{fontSize:16,fontWeight:600}}>{(account && Number.isFinite(Number(account.totalWalletBalance))) ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
+                    <div style={{fontSize:13}}>{(account && Number.isFinite(Number(account.totalUnrealizedProfit))) ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
                   </div>
                 </div>
               </div>
