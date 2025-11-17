@@ -114,19 +114,33 @@ export default function App() {
                 setLiveEma26(temp._liveEma26)
               }
               if (temp._liveEma200 != null) {
-                liveEma200Ref.current = temp._liveEma200
-                setLiveEma200(temp._liveEma200)
-              }
-            } catch (e) {
-              // ignore
-            }
-          })
-        }
-
-        // update current 5-min candle
-        const bucket = floorTo5MinSec(ts)
-        const prev = currentCandleRef.current
-        if (!prev || prev.time !== bucket) {
+                hide_side_toolbar: true,
+                disabled_features: [
+                  'header_widget',
+                  'header_compare',
+                  'header_symbol_search',
+                  'header_indicators',
+                  'timeframes_toolbar',
+                  'left_toolbar',
+                  'context_menus',
+                  'control_bar',
+                  'drawing_toolbar',
+                  'show_hide_button_in_legend',
+                  'header_screenshot',
+                  'header_resolutions',
+                  'display_market_status',
+                  'volume_force_overlay',
+                  'use_localstorage_for_settings',
+                  'show_logo_on_all_charts'
+                ],
+                // minimize visual extras via overrides when supported
+                overrides: {
+                  'paneProperties.background': '#071126',
+                  'paneProperties.backgroundType': 'solid',
+                  'mainSeriesProperties.showCountdown': false,
+                  'mainSeriesProperties.showPriceLine': true
+                },
+                studies_overrides: {},
           // close previous candle (if exists)
           if (prev) {
             // push closed candle
@@ -344,30 +358,35 @@ export default function App() {
             }
             // defensive: remove any visible drawing/tool palettes that the widget adds to the host DOM
             try {
-              setTimeout(() => {
-                const selectors = [
-                  '.tv-drawing-toolbar',
-                  '.tv-floating-toolbar',
-                  '.chart-controls',
-                  '.chart-widget__toolbar',
-                  '.tv-sidebar',
-                  '.js-side-toolbar',
-                  '.apply-common-tooltip',
-                  '.tradingview-widget-container__header'
-                ]
+              // run a short-lived repetitive hide to catch late-added controls
+              const selectors = [
+                '.tv-drawing-toolbar',
+                '.tv-floating-toolbar',
+                '.chart-controls',
+                '.chart-widget__toolbar',
+                '.tv-sidebar',
+                '.js-side-toolbar',
+                '.apply-common-tooltip',
+                '.tradingview-widget-container__header',
+                '.tv-header__right-pane',
+                '.tv-header__first-line'
+              ]
+              const labels = ['Drawings', 'Objects Tree', 'Object tree', 'Compare', 'Indicators', 'Draw']
+              function hideOnce() {
                 selectors.forEach(sel => {
                   document.querySelectorAll(sel).forEach(el => {
                     try { el.style.display = 'none'; el.style.visibility = 'hidden'; } catch (e) {}
                   })
                 })
-                // additional: try to find buttons by title/aria-labels and hide them
-                const labels = ['Drawings', 'Objects Tree', 'Object tree', 'Compare', 'Indicators']
                 labels.forEach(lbl => {
                   document.querySelectorAll(`button[title="${lbl}"], [aria-label="${lbl}"]`).forEach(el => {
                     try { el.style.display = 'none'; } catch (e) {}
                   })
                 })
-              }, 300)
+              }
+              hideOnce()
+              const hid = setInterval(hideOnce, 300)
+              setTimeout(() => clearInterval(hid), 2000)
             } catch (err) { console.warn('failed to hide tv toolbars', err) }
           } catch (err) {
             console.warn('failed to add EMA studies', err)
@@ -394,6 +413,18 @@ export default function App() {
       setTvLoading(false)
     }
   }
+
+  // When the user toggles to TradingView, attempt loading it automatically
+  useEffect(() => {
+    if (!useLightweight) {
+      // try to load tradingview when requested by user
+      attemptLoadTradingView().catch(err => {
+        console.warn('TradingView load requested but failed', err)
+      })
+    }
+    // do not auto-unload when switching back to lightweight; leaving the widget is fine
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useLightweight])
 
   // Load recent historical 5m candles from Binance REST API on mount
   useEffect(() => {
