@@ -13,7 +13,9 @@
 html,body,#root{
   height:100%;
 }
-.body-root { min-height:100vh }
+/* use border-box globally so padding isn't added to element heights unexpectedly */
+*, *::before, *::after { box-sizing: border-box; }
+.body-root { min-height:100% }
 /* Prevent unwanted horizontal scroll and make layout full-bleed */
 html, body { width: 100%; overflow-x: hidden; }
 body {
@@ -115,6 +117,25 @@ body {
 
 /* ensure children can shrink inside the grid (prevents overflow) */
 .main-chart, .sidebar { min-height: 0 }
+
+/* Sidebar scrollbar: hide native scrollbar until user hovers (Chromium + WebKit),
+   and use thin scrollbar on Firefox. Keeps scrollbar visible only when needed. */
+.sidebar {
+  /* ensure overflow:auto is enabled (shows scrollbar only when needed) */
+  overflow: auto;
+  /* Firefox: use thin scrollbar and set thumb color */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.06) transparent;
+}
+
+/* WebKit browsers: hide scrollbar by default */
+.sidebar::-webkit-scrollbar { width: 0; background: transparent }
+.sidebar:hover::-webkit-scrollbar { width: 10px }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.04); border-radius: 8px }
+.sidebar:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10) }
+
+/* Add a subtle inner padding so thumb doesn't overlap content on narrow layouts */
+.sidebar { padding-right: 4px }
 
 /* ensure lightweight-charts container fills the card entirely */
 .main-chart > div { width: 100%; height: 100%; }
