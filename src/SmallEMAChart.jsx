@@ -189,6 +189,24 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const slice = klines.slice(-viewN)
   const eShorts = emaShortArr.slice(-viewN)
   const eLongs = emaLongArr.slice(-viewN)
+  // Wheel handler: zoom in/out by changing visible candle count.
+  const handleWheel = useCallback((e) => {
+    try { e.preventDefault() } catch (er) {}
+    const delta = e.deltaY
+    const step = Math.max(1, Math.round(viewCount * 0.12))
+    let next = viewCount
+    if (delta < 0) {
+      next = Math.max(minView, viewCount - step)
+    } else if (delta > 0) {
+      const upper = Math.min(Math.max(minView, points || 0), maxView)
+      next = Math.min(upper, viewCount + step)
+    }
+    if (next !== viewCount) setViewCount(next)
+  }, [viewCount, minView, maxView, points])
+
+  const canZoomIn = viewN > minView
+  const canZoomOut = viewN < Math.min(points, maxView)
+
   // notifiedRef + onCross effect must be declared before any early returns
   const notifiedRef = useRef(new Set())
   useEffect(() => {
