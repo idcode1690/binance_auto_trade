@@ -236,7 +236,7 @@ export default function App() {
                               <div style={{flex:1.2,textAlign:'right'}}>
                                 {initMargin ? (
                                   <div>
-                                    <div style={{fontWeight:700}}>{initMargin.toFixed(4)} USDT</div>
+                                    <div style={{fontWeight:400}}>{initMargin.toFixed(4)} USDT</div>
                                     <div style={{fontSize:12,color:'var(--muted)'}}>{notional ? `(${((initMargin / notional)*100).toFixed(2)}%)` : '(—)'}</div>
                                   </div>
                                 ) : '—'}
