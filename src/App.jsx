@@ -173,29 +173,6 @@ export default function App() {
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
-                    <div style={{fontSize:14,fontWeight:600}}>BTC Position</div>
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{
-                      (() => {
-                        const p = account && Array.isArray(account.positions) ? account.positions.find(x => x.symbol === String(symbol).toUpperCase()) : null
-                        const amt = p ? Number(p.positionAmt) : Number(holdingsStr) || 0
-                        return amt === 0 ? '0' : amt
-                      })()
-                    }</div>
-                    <div style={{fontSize:13}}>{
-                      (() => {
-                        const p = account && Array.isArray(account.positions) ? account.positions.find(x => x.symbol === String(symbol).toUpperCase()) : null
-                        const amt = p ? Number(p.positionAmt) : Number(holdingsStr) || 0
-                        const val = (isFinite(Number(lastPrice)) ? amt * Number(lastPrice) : null)
-                        return val == null ? 'Position Value: —' : `Position Value: ${formatPrice(val)} USDT`
-                      })()
-                    }</div>
-                  </div>
-                </div>
-
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div>
                     <div style={{fontSize:14,fontWeight:600}}>Futures USDT Balance</div>
                     <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
