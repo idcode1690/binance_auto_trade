@@ -405,11 +405,22 @@ function PositionsList({ account }) {
                       const amt = Math.abs(Number(p.positionAmt) || 0)
                       const entry = Number(p.entryPrice) || 0
                       const up = Number(p.unrealizedProfit) || 0
-                      const initMargin = Number(p.positionInitialMargin || 0) || 0
+                      // Prefer explicit initial margin from Binance when present.
+                      // Otherwise compute a fallback initial margin using notional / leverage if leverage is available.
+                      let initMargin = Number(p.positionInitialMargin || 0) || 0
+                      if (!initMargin && amt > 0 && entry > 0) {
+                        const notional = amt * entry
+                        // try common leverage fields (strings from API), fallback to 0
+                        const lev = Number(p.leverage || p.initialLeverage || p.leverageRate || 0) || 0
+                        if (lev > 0) {
+                          initMargin = notional / lev
+                        }
+                      }
                       let pct = null
                       if (initMargin > 0) {
                         pct = (up / initMargin) * 100
                       } else if (amt > 0 && entry > 0) {
+                        // last resort: ROI vs notional (less preferred)
                         const notional = amt * entry
                         pct = notional > 0 ? (up / notional) * 100 : 0
                       }
