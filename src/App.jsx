@@ -8,11 +8,12 @@ const SmallEMAChart = React.lazy(() => import('./SmallEMAChart'))
 
 function Hero({ title, subtitle }) {
   return (
-    <header className="hero header">
+    <header className="hero">
       <div>
         <h1 className="hero-title">{title}</h1>
         <p className="hero-sub">{subtitle}</p>
       </div>
+      {/* Auto-connect enabled; no manual Connect button */}
     </header>
   )
 }
@@ -33,7 +34,18 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [alerts, setAlerts] = useState([])
-  
+  const [autoOrderEnabled, setAutoOrderEnabled] = useState(() => {
+    try { return localStorage.getItem('autoOrderEnabled') === 'true' } catch (e) { return false }
+  })
+  const [testOrderSizeStr, setTestOrderSizeStr] = useState(() => {
+    try { return localStorage.getItem('testOrderSize') || '10' } catch (e) { return '10' }
+  })
+  const [testFeedback, setTestFeedback] = useState(null)
+  const [sendLive, setSendLive] = useState(() => { try { return localStorage.getItem('sendLive') === 'true' } catch (e) { return false } })
+  const [orders, setOrders] = useState(() => {
+    try { const raw = localStorage.getItem('orders'); return raw ? JSON.parse(raw) : [] } catch (e) { return [] }
+  })
+  const [activeTab, setActiveTab] = useState('alerts') // 'alerts' or 'orders'
   const [holdingsStr, setHoldingsStr] = useState(() => {
     try { return localStorage.getItem('holdings') || '0' } catch (e) { return '0' }
   })
@@ -125,8 +137,6 @@ export default function App() {
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
 
-  
-
   return (
     <div className="container body-root">
       <Hero title="Binance Auto Trading System" />
@@ -170,7 +180,17 @@ export default function App() {
 
         <aside className="sidebar card">
           <div className="sidebar-inner">
-            <h3 style={{marginTop:0}}>Futures Account</h3>
+            {/* Full-width rectangular toggle above Futures Account */}
+            <div style={{marginBottom:12}}>
+              <div className={"wide-toggle " + (autoOrderEnabled ? 'on' : 'off')} onClick={() => { const v = !autoOrderEnabled; setAutoOrderEnabled(v); try{ localStorage.setItem('autoOrderEnabled', v ? 'true' : 'false') } catch{} }}>
+                <div className="wide-thumb" />
+                <div className="side left">Auto Orders Off</div>
+                <div className="side right">Auto Orders On</div>
+              </div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+              <h3 style={{marginTop:0, marginBottom:0}}>Futures Account</h3>
+            </div>
             <div className="meta">
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -184,30 +204,134 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              {/* Test Order controls */}
+              <div style={{marginTop:10,display:'flex',gap:8,alignItems:'center'}}>
+                <input className="theme-input" type="number" min={0.1} step={0.1} value={testOrderSizeStr} onChange={e=>setTestOrderSizeStr(e.target.value)} onBlur={() => { const v = String(Math.max(0.0001, Number(testOrderSizeStr) || 10)); setTestOrderSizeStr(v); try{ localStorage.setItem('testOrderSize', v) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
+                <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--muted)'}}>
+                  <input type="checkbox" checked={sendLive} onChange={e=>{ const v = !!e.target.checked; setSendLive(v); try{ localStorage.setItem('sendLive', v ? 'true' : 'false') }catch{} }} />
+                  Send Live
+                </label>
+                <button className="btn" onClick={async () => {
+                  const usdt = Number(testOrderSizeStr) || 0
+                  if (!(usdt > 0)) {
+                    const msg = 'Invalid USDT size'
+                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                    setTestFeedback({ type: 'error', msg })
+                    setTimeout(() => setTestFeedback(null), 8000)
+                    return
+                  }
+                  const priceNum = Number(lastPrice)
+                  if (!isFinite(priceNum) || priceNum <= 0) {
+                    const msg = 'No valid live price available'
+                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                    setTestFeedback({ type: 'error', msg })
+                    setTimeout(() => setTestFeedback(null), 8000)
+                    return
+                  }
+                  // compute approximate quantity and round to 6 decimals
+                  let qty = Math.floor((usdt / priceNum) * 1e6) / 1e6
+                  if (qty <= 0) {
+                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg: 'Computed quantity is zero' }, ...prev].slice(0,50))
+                    return
+                  }
+                  const body = { symbol: String(symbol || 'BTCUSDT'), side: 'BUY', type: 'MARKET', quantity: String(qty) }
+                  if (sendLive) {
+                    // attempt to POST to backend endpoints
+                    const backendUrls = ['http://127.0.0.1:3000/api/futures/order', '/api/futures/order']
+                    let sent = false
+                    for (const url of backendUrls) {
+                      try {
+                        const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                        const data = await resp.json()
+                        const msg = `Backend response: ${resp.status} ${JSON.stringify(data)}`
+                        setAlerts(prev => [{ id: Date.now(), type: resp.ok ? 'order' : 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                        setTestFeedback({ type: resp.ok ? 'success' : 'error', msg })
+                        const orderEntry = { id: Date.now(), symbol: body.symbol, side: body.side, quantity: body.quantity, usdt: usdt, time: Date.now(), status: resp.ok ? 'sent' : 'error', response: data }
+                        setOrders(prev => { const next = [orderEntry, ...prev].slice(0,200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
+                        setTimeout(() => setTestFeedback(null), 8000)
+                        sent = true
+                        break
+                      } catch (err) {
+                        // try next
+                      }
+                    }
+                    if (!sent) {
+                      const msg = 'Failed to reach backend. Order not sent.'
+                      setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                      setTestFeedback({ type: 'error', msg })
+                      const orderEntry = { id: Date.now(), symbol: body.symbol, side: body.side, quantity: body.quantity, usdt: usdt, time: Date.now(), status: 'error' }
+                      setOrders(prev => { const next = [orderEntry, ...prev].slice(0,200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
+                      setTimeout(() => setTestFeedback(null), 8000)
+                    }
+                  } else {
+                    // simulate only
+                    const msg = `Simulated order: ${body.side} ${body.quantity} ${body.symbol}`
+                    setAlerts(prev => [{ id: Date.now(), type: 'sim', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                    const orderEntry = { id: Date.now(), symbol: body.symbol, side: body.side, quantity: body.quantity, usdt: usdt, time: Date.now(), status: 'simulated' }
+                    setOrders(prev => { const next = [orderEntry, ...prev].slice(0,200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
+                    setTestFeedback({ type: 'info', msg })
+                    setTimeout(() => setTestFeedback(null), 8000)
+                  }
+                }}>Test Order</button>
+                {/* feedback message shown under the button */}
+              </div>
+              {testFeedback ? (
+                <div style={{marginTop:8}}>
+                  <div className={"test-feedback " + (testFeedback.type === 'success' ? 'test-success' : (testFeedback.type === 'error' ? 'test-error' : 'test-info'))}>{testFeedback.msg}</div>
+                </div>
+              ) : null}
             </div>
 
-            <h3 style={{marginTop:12}}>Cross Alerts</h3>
-            <div className="meta">
-              {alerts && alerts.length > 0 ? (
-                <ul className="alerts">
-                  {alerts.map(a => (
-                    <li key={a.id} className="alert-item">
-                      <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-                        <div>
-                          <strong className={a.type === 'bull' ? 'bull' : 'bear'}>
-                            {a.type === 'bull' ? 'Bull' : 'Bear'} Cross
-                          </strong>
-                          <div style={{fontSize:12,color:'var(--muted)'}}>
-                            {new Date(a.time).toLocaleString()} — {Number(a.price).toLocaleString(undefined,{maximumFractionDigits:2})}
+            <div style={{marginTop:12}}>
+              <div style={{display:'flex',gap:8,marginBottom:8}}>
+                <button className={"tab " + (activeTab === 'alerts' ? 'active' : '')} onClick={() => setActiveTab('alerts')}>Cross Alerts</button>
+                <button className={"tab " + (activeTab === 'orders' ? 'active' : '')} onClick={() => setActiveTab('orders')}>Orders</button>
+              </div>
+              <div className="meta">
+                {activeTab === 'alerts' ? (
+                  (alerts && alerts.length > 0) ? (
+                    <ul className="alerts">
+                      {alerts.map(a => (
+                        <li key={a.id} className="alert-item">
+                          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                            <div>
+                              <strong className={a.type === 'bull' ? 'bull' : (a.type === 'bear' ? 'bear' : '')}>
+                                {a.type === 'bull' ? 'Bull' : (a.type === 'bear' ? 'Bear' : (a.type === 'order' ? 'Order' : (a.type === 'sim' ? 'Sim' : 'Info')))}
+                              </strong>
+                              <div style={{fontSize:12,color:'var(--muted)'}}>
+                                {new Date(a.time).toLocaleString()} — {a.price ? Number(a.price).toLocaleString(undefined,{maximumFractionDigits:2}) : ''}
+                                <div style={{fontSize:11,color:'var(--muted)'}}>{a.msg}</div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                'No alerts yet.'
-              )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : ('No alerts yet.')
+                ) : (
+                  // orders tab
+                  (orders && orders.length > 0) ? (
+                    <ul className="orders-list">
+                      {orders.map(o => (
+                        <li key={o.id} className="alert-item">
+                          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                            <div>
+                              <strong className={o.side === 'BUY' ? 'bull' : 'bear'}>{o.side} {o.symbol}</strong>
+                              <div style={{fontSize:12,color:'var(--muted)'}}>
+                                {new Date(o.time).toLocaleString()} — qty: {o.quantity} — usdt: {o.usdt}
+                                {o.response ? <div style={{fontSize:11,color:'var(--muted)'}}>resp: {JSON.stringify(o.response)}</div> : null}
+                              </div>
+                            </div>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{fontSize:13,fontWeight:700}}>{o.status}</div>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : ('No orders yet.')
+                )}
+              </div>
             </div>
           </div>
         </aside>

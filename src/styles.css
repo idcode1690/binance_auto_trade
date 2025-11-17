@@ -13,33 +13,27 @@
 html,body,#root{
   height:100%;
 }
-/* use border-box globally so padding isn't added to element heights unexpectedly */
-*, *::before, *::after { box-sizing: border-box; }
-.body-root { min-height:100% }
-/* Prevent unwanted horizontal scroll and make layout full-bleed */
-html, body { width: 100%; overflow-x: hidden; }
+.body-root { min-height:100vh }
 body {
   margin: 0;
   padding: 0;
-  font-family: Inter, system-ui, Arial, sans-serif;
+  /* nicer system stack with Inter/Segoe/Roboto fallback */
+  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* slightly smaller, cleaner default text size */
+  font-size: 13px;
+  line-height: 1.35;
   background: linear-gradient(180deg, #151515 0%, var(--bg) 100%);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  /* use flex layout so main content can fill remaining space and avoid unexpected page scroll */
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  overflow-y: auto;
 }
 .container {
   max-width: 1100px;
-  margin: 18px auto 0; /* top margin only, remove bottom whitespace */
+  margin: 18px auto;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 18px;
   box-sizing: border-box;
-  flex: 1 1 auto; /* allow container to grow and fill body so no extra bottom space */
 }
 .header {
   display: flex;
@@ -59,8 +53,7 @@ body {
   display:grid;
   grid-template-columns: 1fr 360px;
   gap:16px;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex:1 1 auto;
 }
 .main-chart {
   background: var(--card);
@@ -78,9 +71,7 @@ body {
   grid-template-columns: 1fr 320px;
   gap: 18px;
   align-items: start;
-  /* allow the grid to grow/shrink within the container and not exceed viewport */
-  flex: 1 1 auto;
-  min-height: 0;
+  min-height: 420px;
 }
 .main-chart {
   background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent), var(--card);
@@ -98,8 +89,7 @@ body {
   padding: 14px;
   border: 1px solid rgba(255,255,255,0.03);
   overflow: auto;
-  /* constrain sidebar height to viewport minus header + some spacing so it never flows off-screen */
-  max-height: calc(100vh - 140px);
+  height: 100%;
   box-shadow: 0 6px 22px rgba(0,0,0,0.45);
 }
   background: var(--surface);
@@ -121,28 +111,6 @@ body {
 
 /* make chart area expand to fill chart column */
 .candles-chart, #chart-area { width: 100%; height: 100%; flex: 1 1 auto; background: var(--card) }
-
-/* ensure children can shrink inside the grid (prevents overflow) */
-.main-chart, .sidebar { min-height: 0 }
-
-/* Sidebar scrollbar: hide native scrollbar until user hovers (Chromium + WebKit),
-   and use thin scrollbar on Firefox. Keeps scrollbar visible only when needed. */
-.sidebar {
-  /* ensure overflow:auto is enabled (shows scrollbar only when needed) */
-  overflow: auto;
-  /* Firefox: use thin scrollbar and set thumb color */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.06) transparent;
-}
-
-/* WebKit browsers: hide scrollbar by default */
-.sidebar::-webkit-scrollbar { width: 0; background: transparent }
-.sidebar:hover::-webkit-scrollbar { width: 10px }
-.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.04); border-radius: 8px }
-.sidebar:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10) }
-
-/* Add a subtle inner padding so thumb doesn't overlap content on narrow layouts */
-.sidebar { padding-right: 4px }
 
 /* ensure lightweight-charts container fills the card entirely */
 .main-chart > div { width: 100%; height: 100%; }
@@ -234,4 +202,72 @@ body {
   .btn { padding:7px 10px }
 }
 
-/* fullscreen styles removed - fullscreen is not available by default */
+/* Large left-right toggle switch */
+.switch { display:inline-block; vertical-align:middle }
+.switch input { display:none }
+.switch-track {
+  width:60px; height:34px; background: rgba(255,255,255,0.06); border-radius:999px; display:inline-block; position:relative; transition: background .18s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+.switch-track .switch-thumb { position:absolute; left:4px; top:4px; width:26px; height:26px; background:#fff; border-radius:50%; box-shadow: 0 2px 6px rgba(0,0,0,0.45); transition: transform .18s ease; }
+.switch input:checked + .switch-track { background: var(--accent) }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(26px) }
+.switch-lg .switch-track { width:72px; height:40px }
+.switch-lg .switch-track .switch-thumb { width:32px; height:32px; left:4px; top:4px }
+.switch-lg input:checked + .switch-track .switch-thumb { transform: translateX(32px) }
+.switch-label { font-size:12px; color:var(--muted); margin-left:8px }
+
+/* Full-width rectangular toggle above the sidebar */
+.wide-toggle {
+  width: 100%;
+  height: 48px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  position: relative;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 6px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.03);
+}
+.wide-toggle .side { flex: 1 1 50%; text-align: center; font-weight:700; user-select:none; font-size:13px }
+.wide-toggle .side.left { color: var(--muted); }
+.wide-toggle .side.right { color: var(--muted); }
+.wide-toggle .wide-thumb {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: calc(50% - 12px);
+  height: calc(100% - 12px);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  transition: left .18s ease, background .18s ease;
+}
+.wide-toggle.on { background: rgba(0,122,204,0.12); }
+.wide-toggle.on .wide-thumb { left: calc(50% + 6px); background: var(--accent); }
+/* Make side text render above the thumb so it's always visible */
+.wide-toggle .side { position: relative; z-index: 2 }
+.wide-toggle .wide-thumb { z-index: 1 }
+.wide-toggle.on .side.right { color: var(--text); }
+.wide-toggle.on .side.left { color: rgba(255,255,255,0.95); }
+.wide-toggle.off .side.left { color: var(--text); }
+.wide-toggle.off .side.right { color: rgba(255,255,255,0.85); }
+
+/* make small UI text slightly smaller and elegant */
+.chart-legend { font-size:12px }
+.alert-item { font-size:13px }
+.stat-card .stat-label, .stat-card .stat-value { font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif }
+
+/* Test feedback messages */
+.test-feedback { padding:8px 10px; border-radius:8px; font-size:13px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+.test-success { background: rgba(38,166,154,0.12); color: var(--success); border: 1px solid rgba(38,166,154,0.15) }
+.test-error { background: rgba(217,80,64,0.12); color: var(--danger); border: 1px solid rgba(217,80,64,0.15) }
+.test-info { background: rgba(0,122,204,0.08); color: var(--accent); border: 1px solid rgba(0,122,204,0.12) }
+
+/* Tabs for Alerts / Orders */
+.tab { padding:6px 10px; border-radius:8px; background: rgba(255,255,255,0.02); color:var(--muted); border: 1px solid rgba(255,255,255,0.02); cursor:pointer }
+.tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
+.orders-list { list-style:none; padding:0; margin:0 }
+.orders-list .alert-item { display:flex; justify-content:space-between; align-items:center }
