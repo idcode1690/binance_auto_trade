@@ -34,10 +34,18 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [alerts, setAlerts] = useState([])
-  const [emaShortStr, setEmaShortStr] = useState('26')
-  const [emaLongStr, setEmaLongStr] = useState('200')
-  const [minutesStr, setMinutesStr] = useState('1')
-  const [symbolStr, setSymbolStr] = useState('BTCUSDT')
+  const [emaShortStr, setEmaShortStr] = useState(() => {
+    try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
+  })
+  const [emaLongStr, setEmaLongStr] = useState(() => {
+    try { return localStorage.getItem('emaLong') || '200' } catch (e) { return '200' }
+  })
+  const [minutesStr, setMinutesStr] = useState(() => {
+    try { return localStorage.getItem('minutes') || '1' } catch (e) { return '1' }
+  })
+  const [symbolStr, setSymbolStr] = useState(() => {
+    try { return localStorage.getItem('symbol') || 'BTCUSDT' } catch (e) { return 'BTCUSDT' }
+  })
   const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
@@ -86,13 +94,13 @@ export default function App() {
             <div style={{marginTop: 8}}>
               <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
                 <label style={{fontSize:13,color:'var(--muted)'}}>Symbol:</label>
-                <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => setSymbolStr((symbolStr||'BTCUSDT').trim().toUpperCase())} style={{width:120,padding:6,borderRadius:6}} />
+                <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => { const s = (symbolStr||'BTCUSDT').trim().toUpperCase(); setSymbolStr(s); try{ localStorage.setItem('symbol', s) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
-                <input className="theme-input" type="number" min={1} value={emaShortStr} onChange={e=>setEmaShortStr(e.target.value)} onBlur={() => setEmaShortStr(String(Math.max(1, parseInt(emaShortStr,10) || 26)))} style={{width:72,padding:6,borderRadius:6}} />
+                <input className="theme-input" type="number" min={1} value={emaShortStr} onChange={e=>setEmaShortStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(emaShortStr,10) || 26)); setEmaShortStr(v); try{ localStorage.setItem('emaShort', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA2:</label>
-                <input className="theme-input" type="number" min={1} value={emaLongStr} onChange={e=>setEmaLongStr(e.target.value)} onBlur={() => setEmaLongStr(String(Math.max(1, parseInt(emaLongStr,10) || 200)))} style={{width:72,padding:6,borderRadius:6}} />
+                <input className="theme-input" type="number" min={1} value={emaLongStr} onChange={e=>setEmaLongStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(emaLongStr,10) || 200)); setEmaLongStr(v); try{ localStorage.setItem('emaLong', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>Minutes:</label>
-                <input className="theme-input" type="number" min={1} value={minutesStr} onChange={e=>setMinutesStr(e.target.value)} onBlur={() => setMinutesStr(String(Math.max(1, parseInt(minutesStr,10) || 1)))} style={{width:72,padding:6,borderRadius:6}} />
+                <input className="theme-input" type="number" min={1} value={minutesStr} onChange={e=>setMinutesStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(minutesStr,10) || 1)); setMinutesStr(v); try{ localStorage.setItem('minutes', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
               </div>
               <ChartToggle
                 livePrice={lastPrice}
