@@ -61,6 +61,9 @@ export default function App() {
   const [symbolStr, setSymbolStr] = useState(() => {
     try { return localStorage.getItem('symbol') || 'BTCUSDT' } catch (e) { return 'BTCUSDT' }
   })
+  const [useTestnet, setUseTestnet] = useState(() => {
+    try { return localStorage.getItem('useTestnet') === 'true' } catch (e) { return false }
+  })
   const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
@@ -154,6 +157,8 @@ export default function App() {
                 enable it step-by-step and capture any initialization errors. */}
             <div style={{marginTop: 8}}>
               <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+                <label style={{fontSize:13,color:'var(--muted)'}}>Testnet:</label>
+                <input type="checkbox" checked={useTestnet} onChange={e => { const v = e.target.checked; setUseTestnet(v); try{ localStorage.setItem('useTestnet', v ? 'true' : 'false') }catch{} }} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>Symbol:</label>
                 <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => { const s = (symbolStr||'BTCUSDT').trim().toUpperCase(); setSymbolStr(s); try{ localStorage.setItem('symbol', s) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
@@ -193,6 +198,7 @@ export default function App() {
                 emaLong={emaLong}
                 minutes={minutes}
                 symbol={symbol}
+                useTestnet={useTestnet}
               />
             </div>
           </div>
@@ -288,7 +294,7 @@ export default function App() {
   )
 }
 
-function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
+function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT', useTestnet = false }) {
   const toBinanceInterval = (m) => {
     const n = Math.max(1, Number(m || 1))
     const map = {
@@ -315,6 +321,7 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
         emaShort={Number(emaShort)||26}
         emaLong={Number(emaLong)||200}
         symbol={String(symbol || 'BTCUSDT')}
+        useTestnet={useTestnet}
       />
     </Suspense>
   )

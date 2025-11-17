@@ -11,6 +11,11 @@ app.use(express.json())
 const PORT = process.env.PORT || 3000
 const API_KEY = process.env.BINANCE_API_KEY
 const API_SECRET = process.env.BINANCE_API_SECRET
+const USE_TESTNET = String(process.env.BINANCE_TESTNET || '').toLowerCase() === 'true'
+
+// Allow overriding the base URLs via env vars for flexibility
+const FUTURES_API_BASE = process.env.BINANCE_FUTURES_API_BASE || (USE_TESTNET ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com')
+const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://stream.binance.com:9443')
 
 function sign(queryString) {
   return crypto.createHmac('sha256', API_SECRET).update(queryString).digest('hex')
@@ -20,7 +25,7 @@ async function signedGet(path, params = {}) {
   if (!API_KEY || !API_SECRET) {
     throw new Error('Missing BINANCE_API_KEY or BINANCE_API_SECRET in environment')
   }
-  const base = 'https://fapi.binance.com'
+  const base = FUTURES_API_BASE
   const ts = Date.now()
   const q = new URLSearchParams({ ...params, timestamp: String(ts) }).toString()
   const signature = sign(q)
@@ -40,7 +45,7 @@ async function getExchangeInfoForSymbol(sym) {
     return cached.info
   }
   try {
-    const url = `https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=${s}`
+    const url = `${FUTURES_API_BASE}/fapi/v1/exchangeInfo?symbol=${s}`
     const resp = await axios.get(url)
     const info = resp.data && resp.data.symbols && resp.data.symbols[0] ? resp.data.symbols[0] : null
     if (info) exchangeCache.set(s, { ts: now, info })
@@ -83,6 +88,15 @@ app.get('/api/futures/account', async (req, res) => {
     console.error('futures/account error', err && err.response ? err.response.data : err.message)
     res.status(500).json({ error: String(err && err.message) })
   }
+})
+
+// expose runtime config (testnet / base urls) for the frontend to adapt
+app.get('/api/config', (req, res) => {
+  res.json({
+    useTestnet: USE_TESTNET,
+    futuresApiBase: FUTURES_API_BASE,
+    futuresWsBase: FUTURES_WS_BASE
+  })
 })
 
 app.post('/api/futures/order', async (req, res) => {
@@ -133,7 +147,7 @@ app.post('/api/futures/order', async (req, res) => {
       }
     }
 
-    const base = 'https://fapi.binance.com'
+    const base = FUTURES_API_BASE
     const ts = Date.now()
     const params = { symbol: String(symbol).toUpperCase(), side, type, quantity: qQuantity }
     if (typeof price !== 'undefined' && price !== null) params.price = String(price)
