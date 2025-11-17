@@ -90,31 +90,47 @@ export default function App() {
   useEffect(() => {
     let mounted = true
     // try SSE subscription for realtime account updates; polling remains as fallback
+    let es = null
     try {
-      const es = new EventSource('/api/futures/sse')
-      es.onmessage = (ev) => {
+      const sseUrls = [
+        'http://127.0.0.1:3000/api/futures/sse',
+        '/api/futures/sse'
+      ]
+      for (const url of sseUrls) {
         try {
-          const data = JSON.parse(ev.data)
-          if (!mounted) return
-          if (data) {
-            setAccount(data)
-            if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-              try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-              setFuturesBalanceStr(String(data.totalWalletBalance))
-            }
-            if (Array.isArray(data.positions) && symbol) {
-              const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-              if (p) {
-                const amt = Number(p.positionAmt) || 0
-                try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-                setHoldingsStr(String(amt))
+          es = new EventSource(url)
+          // if EventSource connects, break
+          es.onopen = () => { /* opened */ }
+          break
+        } catch (err) {
+          es = null
+        }
+      }
+      if (es) {
+        es.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data)
+            if (!mounted) return
+            if (data) {
+              setAccount(data)
+              if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+                try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+                setFuturesBalanceStr(String(data.totalWalletBalance))
+              }
+              if (Array.isArray(data.positions) && symbol) {
+                const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+                if (p) {
+                  const amt = Number(p.positionAmt) || 0
+                  try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+                  setHoldingsStr(String(amt))
+                }
               }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
+        es.onerror = () => { /* keep, fallback to polling if SSE dies */ }
       }
-      es.onerror = () => { try { es.close() } catch (e) {} }
-    } catch (e) {}
+    } catch (e) { es = null }
     const backendUrls = [
       'http://127.0.0.1:3000/api/futures/account',
       '/api/futures/account'
@@ -152,7 +168,7 @@ export default function App() {
     fetchAccount()
     // Poll more frequently for testnet/private info (faster UX)
     const id = setInterval(fetchAccount, 3000)
-    return () => { mounted = false; clearInterval(id) }
+    return () => { mounted = false; clearInterval(id); try { if (es) es.close() } catch (e) {} }
   }, [symbol])
 
   const wsRef = useRef(null)
