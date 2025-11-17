@@ -278,6 +278,49 @@ export default function App() {
                   )}
                 </div>
               </div>
+              {/* Positions list */}
+              <div style={{marginTop:12}}>
+                <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>Open Positions</div>
+                {account && Array.isArray(account.positions) ? (
+                  (() => {
+                    const open = account.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
+                    if (!open.length) return (<div style={{fontSize:12,color:'var(--muted)'}}>No open positions</div>)
+                    return (
+                      <div className="positions">
+                        {open.map(p => {
+                          const amt = Number(p.positionAmt) || 0
+                          const entry = Number(p.entryPrice) || 0
+                          const upl = Number(p.unrealizedProfit) || 0
+                          const initMargin = Number(p.positionInitialMargin || 0) || 0
+                          const lev = p.leverage ? Number(p.leverage) : undefined
+                          let roiPct = null
+                          if (initMargin && initMargin > 0) {
+                            roiPct = (upl / initMargin) * 100
+                          } else if (lev && entry && Math.abs(amt) > 0) {
+                            const notional = Math.abs(amt) * entry
+                            const usedMargin = notional / lev
+                            if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
+                          }
+                          return (
+                            <div key={p.symbol} className="position-row" style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                              <div>
+                                <div style={{fontSize:13,fontWeight:700}}>{p.symbol}</div>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>Qty: {String(amt)} @ {entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                              </div>
+                              <div style={{textAlign:'right'}}>
+                                <div style={{fontSize:13,fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</div>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>{roiPct != null ? `${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%` : 'ROI: —'}</div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div style={{fontSize:12,color:'var(--muted)'}}>Positions not available</div>
+                )}
+              </div>
             </div>
           </div>
         </aside>
