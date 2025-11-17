@@ -34,9 +34,12 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [alerts, setAlerts] = useState([])
-  const [emaShort, setEmaShort] = useState(26)
-  const [emaLong, setEmaLong] = useState(200)
-  const [minutes, setMinutes] = useState(1)
+  const [emaShortStr, setEmaShortStr] = useState('26')
+  const [emaLongStr, setEmaLongStr] = useState('200')
+  const [minutesStr, setMinutesStr] = useState('1')
+  const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
+  const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
+  const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
   const price = lastPrice == null ? '' : Number(lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })
   const change = ''
   const candles = 0
@@ -66,11 +69,11 @@ export default function App() {
             <div style={{marginTop: 8}}>
               <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
-                <input type="number" min={1} value={emaShort} onChange={e=>setEmaShort(Number(e.target.value)||1)} style={{width:72,padding:6,borderRadius:6,border:'1px solid rgba(255,255,255,0.04)'}} />
+                <input className="theme-input" type="number" min={1} value={emaShortStr} onChange={e=>setEmaShortStr(e.target.value)} onBlur={() => setEmaShortStr(String(Math.max(1, parseInt(emaShortStr,10) || 26)))} style={{width:72,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA2:</label>
-                <input type="number" min={1} value={emaLong} onChange={e=>setEmaLong(Number(e.target.value)||1)} style={{width:72,padding:6,borderRadius:6,border:'1px solid rgba(255,255,255,0.04)'}} />
+                <input className="theme-input" type="number" min={1} value={emaLongStr} onChange={e=>setEmaLongStr(e.target.value)} onBlur={() => setEmaLongStr(String(Math.max(1, parseInt(emaLongStr,10) || 200)))} style={{width:72,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>Minutes:</label>
-                <input type="number" min={1} value={minutes} onChange={e=>setMinutes(Number(e.target.value)||1)} style={{width:72,padding:6,borderRadius:6,border:'1px solid rgba(255,255,255,0.04)'}} />
+                <input className="theme-input" type="number" min={1} value={minutesStr} onChange={e=>setMinutesStr(e.target.value)} onBlur={() => setMinutesStr(String(Math.max(1, parseInt(minutesStr,10) || 1)))} style={{width:72,padding:6,borderRadius:6}} />
               </div>
               <ChartToggle
                 livePrice={lastPrice}
