@@ -427,21 +427,24 @@ function PositionsList({ account }) {
                   <td>
                     {(() => {
                       const initial = Number(p.positionInitialMargin || 0) || 0
-                      // If we have an initial margin, show it clearly (USDT)
+                      const toLabel = (raw) => {
+                        if (!raw) return '-'
+                        const s = String(raw).toLowerCase()
+                        if (s.indexOf('isol') !== -1) return 'Isolated'
+                        if (s.indexOf('cross') !== -1 || s.indexOf('cros') !== -1) return 'Cross'
+                        return String(raw)
+                      }
+                      const label = p.marginType ? toLabel(p.marginType) : (typeof p.isIsolated === 'boolean' ? (p.isIsolated ? 'Isolated' : 'Cross') : (typeof p.isolated === 'boolean' ? (p.isolated ? 'Isolated' : 'Cross') : '-'))
                       if (initial > 0) {
                         return (
                           <div>
-                            <div style={{fontWeight:700}}>{fmt(initial, 4)} USDT</div>
-                            <div style={{fontSize:11,color:'var(--muted)'}}>{p.marginType ? String(p.marginType).toUpperCase() : (typeof p.isIsolated === 'boolean' ? (p.isIsolated ? 'ISOLATED' : 'CROSSED') : '-')}</div>
+                            <div style={{fontWeight:700}}>{fmt(initial, 2)} USDT</div>
+                            <div style={{fontSize:11,color:'var(--muted)'}}>{label !== '-' ? `(${label})` : '-'}</div>
                           </div>
                         )
                       }
-
-                      // fallback: show margin type / isolated flag if present
-                      if (p.marginType) return String(p.marginType).toUpperCase()
-                      if (typeof p.isolated === 'boolean') return p.isolated ? 'ISOLATED' : 'CROSSED'
-                      if (typeof p.isIsolated === 'boolean') return p.isIsolated ? 'ISOLATED' : 'CROSSED'
-                      return '-'
+                      // fallback: show label in parentheses or dash
+                      return label !== '-' ? `(${label})` : '-'
                     })()}
                   </td>
                 </tr>
