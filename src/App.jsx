@@ -201,7 +201,7 @@ export default function App() {
                     if (!open.length) return (<div style={{fontSize:12,color:'var(--muted)'}}>No open positions</div>)
                     return (
                       <div className="positions-table" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,overflow:'hidden'}}>
-                        <div style={{display:'flex',padding:'8px 10px',background:'rgba(0,0,0,0.02)',fontSize:12,fontWeight:700}}>
+                        <div style={{display:'flex',gap:12,padding:'8px 6px',background:'rgba(0,0,0,0.02)',fontSize:12,fontWeight:700}}>
                           <div style={{flex:1.2}}>Symbol</div>
                           <div style={{flex:1,textAlign:'right'}}>Lev</div>
                           <div style={{flex:1,textAlign:'right'}}>Size</div>
@@ -228,7 +228,7 @@ export default function App() {
                           const isPos = upl >= 0
                           const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
                           return (
-                            <div key={p.symbol} style={{display:'flex',padding:'8px 10px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
+                            <div key={p.symbol} style={{display:'flex',gap:12,padding:'8px 6px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
                               <div style={{flex:1.2}}>{p.symbol}</div>
                               <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
                               <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
