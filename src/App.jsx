@@ -228,12 +228,69 @@ export default function App() {
                     setTimeout(() => setTestFeedback(null), 8000)
                     return
                   }
-                  // compute approximate quantity and round to 6 decimals
-                  let qty = Math.floor((usdt / priceNum) * 1e6) / 1e6
+                  
+                  // Fetch exchangeInfo for symbol to determine stepSize and minNotional
+                  let decimals = 6 // fallback
+                  let minQty = 0
+                  let minNotional = 0
+                  try {
+                    const s = String(symbol || 'BTCUSDT').toUpperCase()
+                    const resp = await fetch(`https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=${s}`)
+                    if (resp && resp.ok) {
+                      const j = await resp.json()
+                      const info = j && j.symbols && j.symbols[0]
+                      if (info && Array.isArray(info.filters)) {
+                        const lot = info.filters.find(f => f.filterType === 'LOT_SIZE')
+                        const minNot = info.filters.find(f => f.filterType === 'MIN_NOTIONAL' || f.filterType === 'NOTIONAL')
+                        if (lot && lot.stepSize) {
+                          // compute decimals from stepSize, e.g. 0.001 -> 3
+                          const step = String(lot.stepSize)
+                          if (step.indexOf('.') >= 0) {
+                            const dec = step.split('.')[1].replace(/0+$/,'')
+                            decimals = dec.length
+                          } else decimals = 0
+                        }
+                        if (lot && lot.minQty) minQty = Number(lot.minQty)
+                        if (minNot && (minNot.notional || minNot.minNotional)) minNotional = Number(minNot.notional || minNot.minNotional || 0)
+                      }
+                    }
+                  } catch (err) {
+                    // ignore — we'll still perform a best-effort rounding
+                  }
+
+                  // compute quantity from USDT and price, then floor to allowed decimals
+                  let rawQty = (usdt / priceNum)
+                  const factor = Math.pow(10, decimals)
+                  let qty = Math.floor(rawQty * factor) / factor
                   if (qty <= 0) {
-                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg: 'Computed quantity is zero' }, ...prev].slice(0,50))
+                    const msg = 'Computed quantity is zero'
+                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                    setTestFeedback({ type: 'error', msg })
+                    setTimeout(() => setTestFeedback(null), 8000)
                     return
                   }
+
+                  // validate minQty
+                  if (minQty && qty < minQty) {
+                    const msg = `Quantity ${qty} smaller than symbol minQty ${minQty}`
+                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                    setTestFeedback({ type: 'error', msg })
+                    setTimeout(() => setTestFeedback(null), 8000)
+                    return
+                  }
+
+                  // validate minNotional (requires price)
+                  if (minNotional && isFinite(priceNum)) {
+                    const notional = qty * priceNum
+                    if (notional < minNotional) {
+                      const msg = `Notional ${notional.toFixed(2)} < minNotional ${minNotional}`
+                      setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
+                      setTestFeedback({ type: 'error', msg })
+                      setTimeout(() => setTestFeedback(null), 8000)
+                      return
+                    }
+                  }
+
                   const body = { symbol: String(symbol || 'BTCUSDT'), side: 'BUY', type: 'MARKET', quantity: String(qty) }
                   if (sendLive) {
                     // attempt to POST to backend endpoints
