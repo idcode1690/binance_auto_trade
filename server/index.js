@@ -94,7 +94,10 @@ app.get('/api/futures/account', async (req, res) => {
         unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
         leverage: p.leverage ? Number(p.leverage) : undefined,
         marginType: p.marginType || p.marginType || undefined,
-        positionSide: p.positionSide || undefined
+        positionSide: p.positionSide || undefined,
+        // include initial margin and isolated wallet when present so frontend can compute ROI
+        positionInitialMargin: Number(p.positionInitialMargin || p.initialMargin || p.initMargin || 0) || 0,
+        isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsolatedWallet) : undefined)
       })) : []
     }
     res.json(out)
@@ -167,7 +170,9 @@ app.get('/api/futures/sse', async (req, res) => {
           unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
           leverage: p.leverage ? Number(p.leverage) : undefined,
           marginType: p.marginType || undefined,
-          positionSide: p.positionSide || undefined
+          positionSide: p.positionSide || undefined,
+          positionInitialMargin: Number(p.positionInitialMargin || p.initialMargin || p.initMargin || 0) || 0,
+          isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsolatedWallet) : undefined)
         })) : []
       }
       const snap = JSON.stringify(out)

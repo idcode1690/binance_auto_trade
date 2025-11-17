@@ -86,6 +86,10 @@ export default function App() {
   const value = isFinite(Number(lastPrice)) ? holdings * Number(lastPrice) : null
   const change = ''
   const candles = 0
+  // derived account numbers for display
+  const accountWallet = (account && Number.isFinite(Number(account.totalWalletBalance))) ? Number(account.totalWalletBalance) : null
+  const accountUnreal = (account && Number.isFinite(Number(account.totalUnrealizedProfit))) ? Number(account.totalUnrealizedProfit) : null
+  const accountEquity = (accountWallet != null && accountUnreal != null) ? (accountWallet + accountUnreal) : (accountWallet != null ? accountWallet : null)
 
   // Poll backend for Binance Futures account info (requires server running and .env set)
   useEffect(() => {
@@ -260,8 +264,8 @@ export default function App() {
                     <div style={{fontSize:12,color:'var(--muted)'}}>{account && Number.isFinite(Number(account.totalWalletBalance)) ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{(account && Number.isFinite(Number(account.totalWalletBalance))) ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
-                    <div style={{fontSize:13}}>{(account && Number.isFinite(Number(account.totalUnrealizedProfit))) ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
+                    <div style={{fontSize:16,fontWeight:600}}>{accountEquity != null ? formatPrice(accountEquity) : formatPrice(Number(futuresBalanceStr || 0))}</div>
+                    <div style={{fontSize:13}}>{accountUnreal != null ? `Unrealized P/L: ${formatPrice(accountUnreal)} USDT` : ''}</div>
                   </div>
                 </div>
               </div>
@@ -402,11 +406,19 @@ function PositionsList({ account }) {
                       const amt = Math.abs(Number(p.positionAmt) || 0)
                       const entry = Number(p.entryPrice) || 0
                       const up = Number(p.unrealizedProfit) || 0
-                      if (amt > 0 && entry > 0) {
+                      const initMargin = Number(p.positionInitialMargin || 0) || 0
+                      let pct = null
+                      if (initMargin > 0) {
+                        // ROI relative to initial margin
+                        pct = (up / initMargin) * 100
+                      } else if (amt > 0 && entry > 0) {
+                        // fallback: PNL / notional
                         const notional = amt * entry
-                        const pct = notional > 0 ? (up / notional) * 100 : 0
+                        pct = notional > 0 ? (up / notional) * 100 : 0
+                      }
+                      if (pct !== null) {
                         const sign = pct > 0 ? '+' : ''
-                        return (<div style={{fontSize:11,color:'var(--muted)'}}>{sign}{fmt(pct,2)}%</div>)
+                        return (<div style={{fontSize:11,color:'var(--muted)'}}>{sign}{fmt(pct,2)}% ROI</div>)
                       }
                       return null
                     })()}
