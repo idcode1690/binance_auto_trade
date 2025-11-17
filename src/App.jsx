@@ -114,33 +114,20 @@ export default function App() {
                 setLiveEma26(temp._liveEma26)
               }
               if (temp._liveEma200 != null) {
-                hide_side_toolbar: true,
-                disabled_features: [
-                  'header_widget',
-                  'header_compare',
-                  'header_symbol_search',
-                  'header_indicators',
-                  'timeframes_toolbar',
-                  'left_toolbar',
-                  'context_menus',
-                  'control_bar',
-                  'drawing_toolbar',
-                  'show_hide_button_in_legend',
-                  'header_screenshot',
-                  'header_resolutions',
-                  'display_market_status',
-                  'volume_force_overlay',
-                  'use_localstorage_for_settings',
-                  'show_logo_on_all_charts'
-                ],
-                // minimize visual extras via overrides when supported
-                overrides: {
-                  'paneProperties.background': '#071126',
-                  'paneProperties.backgroundType': 'solid',
-                  'mainSeriesProperties.showCountdown': false,
-                  'mainSeriesProperties.showPriceLine': true
-                },
-                studies_overrides: {},
+                liveEma200Ref.current = temp._liveEma200
+                setLiveEma200(temp._liveEma200)
+              }
+
+            } catch (e) {
+              // ignore
+            }
+          })
+        }
+
+        // update current 5-min candle
+        const bucket = floorTo5MinSec(ts)
+        const prev = currentCandleRef.current
+        if (!prev || prev.time !== bucket) {
           // close previous candle (if exists)
           if (prev) {
             // push closed candle
