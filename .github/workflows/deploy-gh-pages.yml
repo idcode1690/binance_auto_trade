@@ -29,7 +29,8 @@ jobs:
         run: npm run build
 
       - name: Upload artifact for GitHub Pages
-        uses: actions/upload-pages-artifact@v1
+        # use the latest upload-pages-artifact major (v2) to avoid deprecated transitive actions
+        uses: actions/upload-pages-artifact@v2
         with:
           path: ./dist
 
@@ -42,4 +43,5 @@ jobs:
       contents: read
     steps:
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v1
+        # use the latest deploy-pages major if available
+        uses: actions/deploy-pages@v2
