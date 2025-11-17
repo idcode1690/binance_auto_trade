@@ -12,6 +12,9 @@ function floorTo5MinSec(ms) {
 }
 
 export default function App() {
+  // DEV: force using internal SVG fallback to avoid external TradingView loading issues
+  // Set to true to force the app to show the internal chart (useful when tv.js is blocked)
+  const FORCE_FALLBACK = true
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [displayPrice, setDisplayPrice] = useState(null)
@@ -27,9 +30,17 @@ export default function App() {
   const prevDiffRef = useRef(null)
   const ema26Ref = useRef(null)
   const ema200Ref = useRef(null)
+  // live (tick-based) EMA values for immediate visual feedback
+  const [liveEma26, setLiveEma26] = useState(null)
+  const [liveEma200, setLiveEma200] = useState(null)
+  const liveEma26Ref = useRef(null)
+  const liveEma200Ref = useRef(null)
 
   const wsRef = useRef(null)
   const currentCandleRef = useRef(null)
+  // batch updates to UI per animation frame to avoid excessive re-renders
+  const pendingFrameRef = useRef(null)
+  const latestTempRef = useRef(null)
 
   // TradingView diagnostics state (visible fallback if script blocked)
   const [tvLoaded, setTvLoaded] = useState(false)
@@ -39,6 +50,10 @@ export default function App() {
   // EMA smoothing factors for period counts (periods are number of 5-min candles)
   const alpha26 = 2 / (26 + 1)
   const alpha200 = 2 / (200 + 1)
+  // live (tick) EMA smoothing factors (higher alpha => more responsive)
+  // you can tune these for faster (larger) or smoother (smaller) live EMA behavior
+  const alphaLive26 = 0.2 // fast-reacting live EMA for 26
+  const alphaLive200 = 0.05 // smoother live EMA for 200
 
   useEffect(() => { candlesRef.current = candles }, [candles])
 
@@ -62,6 +77,45 @@ export default function App() {
         const ts = d.T || Date.now()
         if (!isFinite(price)) return
         setLastPrice(price)
+
+        // schedule a fast UI update (batched via rAF) to reflect live trades
+        function scheduleRenderUpdate(tempCandle) {
+          // always keep the latest temp in ref for the rAF update
+          latestTempRef.current = tempCandle
+
+          // Immediately update price and live EMAs for snappy UI feedback
+          try {
+            setDisplayPrice(tempCandle.close)
+            if (tempCandle._liveEma26 != null) {
+              liveEma26Ref.current = tempCandle._liveEma26
+              setLiveEma26(tempCandle._liveEma26)
+            }
+            if (tempCandle._liveEma200 != null) {
+              liveEma200Ref.current = tempCandle._liveEma200
+              setLiveEma200(tempCandle._liveEma200)
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          // Batch the heavier DOM state work (array copying) into rAF
+          if (pendingFrameRef.current) return
+          pendingFrameRef.current = window.requestAnimationFrame(() => {
+            pendingFrameRef.current = null
+            const temp = latestTempRef.current
+            if (!temp) return
+            // update last candle in state without re-computing full history
+            setCandles(prev => {
+              const base = prev.slice()
+              if (base.length === 0 || base[base.length - 1].time !== temp.time) {
+                base.push(temp)
+              } else {
+                base[base.length - 1] = temp
+              }
+              return base
+            })
+          })
+        }
 
         // update current 5-min candle
         const bucket = floorTo5MinSec(ts)
@@ -107,6 +161,17 @@ export default function App() {
           }
           // start new candle
           currentCandleRef.current = { time: bucket, open: price, high: price, low: price, close: price }
+          // compute live EMAs (tick-based) using latest live refs
+          const prevLive26 = liveEma26Ref.current
+          const prevLive200 = liveEma200Ref.current
+          const liveNext26 = prevLive26 == null ? price : alphaLive26 * price + (1 - alphaLive26) * prevLive26
+          const liveNext200 = prevLive200 == null ? price : alphaLive200 * price + (1 - alphaLive200) * prevLive200
+          liveEma26Ref.current = liveNext26
+          liveEma200Ref.current = liveNext200
+          setLiveEma26(liveNext26)
+          setLiveEma200(liveNext200)
+          // also schedule immediate UI update for new candle (include live EMA)
+          scheduleRenderUpdate({ ...currentCandleRef.current, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200 })
         } else {
           // update existing candle
           const c = { ...currentCandleRef.current }
@@ -114,6 +179,17 @@ export default function App() {
           c.high = Math.max(c.high, price)
           c.low = Math.min(c.low, price)
           currentCandleRef.current = c
+          // update live EMAs with this tick price
+          const prevLive26 = liveEma26Ref.current
+          const prevLive200 = liveEma200Ref.current
+          const liveNext26 = prevLive26 == null ? price : alphaLive26 * price + (1 - alphaLive26) * prevLive26
+          const liveNext200 = prevLive200 == null ? price : alphaLive200 * price + (1 - alphaLive200) * prevLive200
+          liveEma26Ref.current = liveNext26
+          liveEma200Ref.current = liveNext200
+          setLiveEma26(liveNext26)
+          setLiveEma200(liveNext200)
+          // schedule immediate UI update for the updated candle (include live EMA)
+          scheduleRenderUpdate({ ...c, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200 })
         }
       } catch (err) { console.error('parse', err) }
     }
@@ -132,6 +208,7 @@ export default function App() {
 
   // expose latest in-chart current candle (not yet closed)
   useEffect(() => {
+    // keep a fallback periodic sync; most realtime updates are handled via rAF batching
     const interval = setInterval(() => {
       const cur = currentCandleRef.current
       if (!cur) return
@@ -156,7 +233,7 @@ export default function App() {
           // keep displayed price in sync with the in-chart current candle
           setDisplayPrice(last.close)
       }
-    }, 1000)
+    }, 250)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ema26, ema200])
@@ -167,6 +244,12 @@ export default function App() {
     // If the load fails (CSP/blocked/parentNode issues), we fall back to the internal SVG chart.
     let cancelled = false
     async function tryAutoLoad() {
+      // If developer forced fallback, skip loading TradingView entirely
+      if (FORCE_FALLBACK) {
+        setTvError('forced-fallback')
+        setTvLoaded(false)
+        return
+      }
       // small delay to let the DOM settle
       await new Promise(r => setTimeout(r, 250))
       if (cancelled) return
@@ -281,6 +364,33 @@ export default function App() {
               try { tvWidget.chart().createStudy('Moving Average Exponential', false, false, [26], null, () => {}) } catch (e) { console.warn('EMA26 createStudy failed', e) }
               try { tvWidget.chart().createStudy('Moving Average Exponential', false, false, [200], null, () => {}) } catch (e) { console.warn('EMA200 createStudy failed', e) }
             }
+            // defensive: remove any visible drawing/tool palettes that the widget adds to the host DOM
+            try {
+              setTimeout(() => {
+                const selectors = [
+                  '.tv-drawing-toolbar',
+                  '.tv-floating-toolbar',
+                  '.chart-controls',
+                  '.chart-widget__toolbar',
+                  '.tv-sidebar',
+                  '.js-side-toolbar',
+                  '.apply-common-tooltip',
+                  '.tradingview-widget-container__header'
+                ]
+                selectors.forEach(sel => {
+                  document.querySelectorAll(sel).forEach(el => {
+                    try { el.style.display = 'none'; el.style.visibility = 'hidden'; } catch (e) {}
+                  })
+                })
+                // additional: try to find buttons by title/aria-labels and hide them
+                const labels = ['Drawings', 'Objects Tree', 'Object tree', 'Compare', 'Indicators']
+                labels.forEach(lbl => {
+                  document.querySelectorAll(`button[title="${lbl}"], [aria-label="${lbl}"]`).forEach(el => {
+                    try { el.style.display = 'none'; } catch (e) {}
+                  })
+                })
+              }, 300)
+            } catch (err) { console.warn('failed to hide tv toolbars', err) }
           } catch (err) {
             console.warn('failed to add EMA studies', err)
           }
@@ -365,8 +475,10 @@ export default function App() {
           <div className="title">Binance BTC/USDT — 5m Candles + EMA26/200</div>
           <div className="top-meta">Real-time trade price from Binance (aggregated to 5m candles)</div>
           <div style={{marginTop:6}}>
-            <span className="meta" style={{marginRight:12}}>EMA26: {ema26 == null ? '—' : formatNumber(ema26)}</span>
-            <span className="meta" style={{marginRight:12}}>EMA200: {ema200 == null ? '—' : formatNumber(ema200)}</span>
+            <span className="meta" style={{marginRight:12}}>EMA26 (closed): {ema26 == null ? '—' : formatNumber(ema26)}</span>
+            <span className="meta" style={{marginRight:12}}>EMA26 (live): {liveEma26 == null ? '—' : formatNumber(liveEma26)}</span>
+            <span className="meta" style={{marginRight:12}}>EMA200 (closed): {ema200 == null ? '—' : formatNumber(ema200)}</span>
+            <span className="meta" style={{marginRight:12}}>EMA200 (live): {liveEma200 == null ? '—' : formatNumber(liveEma200)}</span>
             <span style={{fontWeight:700, marginLeft:6}} className={ema26 != null && ema200 != null ? (ema26 > ema200 ? 'bull' : (ema26 < ema200 ? 'bear' : 'meta')) : 'meta'}>
               {ema26 == null || ema200 == null ? 'EMA: —' : (ema26 > ema200 ? 'Bull Cross ▲' : (ema26 < ema200 ? 'Bear Cross ▼' : 'Neutral'))}
             </span>
@@ -509,19 +621,38 @@ function CandlestickChart({ data = [], height = 360 }) {
 
         {/* EMA lines */}
         {(() => {
+          // closed EMA polylines
           const points26 = []
           const points200 = []
+          // live EMA polylines (prefer _liveEma if present, otherwise fall back to closed ema for continuity)
+          const live26 = []
+          const live200 = []
+
           data.forEach((d, i) => {
             const x = pad + i * (barWidth + gap) + Math.floor(barWidth/2)
             if (d.ema26 != null) points26.push([x, yFor(d.ema26)])
             if (d.ema200 != null) points200.push([x, yFor(d.ema200)])
+
+            // build live series: use _liveEma* if available, otherwise closed value
+            const v26 = d._liveEma26 != null ? d._liveEma26 : (d.ema26 != null ? d.ema26 : null)
+            const v200 = d._liveEma200 != null ? d._liveEma200 : (d.ema200 != null ? d.ema200 : null)
+            if (v26 != null) live26.push([x, yFor(v26)])
+            if (v200 != null) live200.push([x, yFor(v200)])
           })
+
           const path26 = points26.map(p => p.join(',')).join(' ')
           const path200 = points200.map(p => p.join(',')).join(' ')
+          const livePath26 = live26.map(p => p.join(',')).join(' ')
+          const livePath200 = live200.map(p => p.join(',')).join(' ')
+
           return (
             <g>
               {points26.length > 0 && <polyline points={path26} fill="none" stroke="#60a5fa" strokeWidth={3} strokeLinecap="round" />}
               {points200.length > 0 && <polyline points={path200} fill="none" stroke="#f97316" strokeWidth={3} strokeLinecap="round" />}
+
+              {/* live EMA overlays: dashed, thinner, brighter */}
+              {livePath26.length > 0 && <polyline points={livePath26} fill="none" stroke="#93c5fd" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />}
+              {livePath200.length > 0 && <polyline points={livePath200} fill="none" stroke="#ffb27a" strokeWidth={2} strokeLinecap="round" strokeDasharray="6 4" />}
             </g>
           )
         })()}
