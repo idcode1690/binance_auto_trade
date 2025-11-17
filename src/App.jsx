@@ -1,6 +1,99 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createChart } from 'lightweight-charts'
 
+// TradingView loader component: inserts external script and initializes widget on demand
+function TradingViewLoader() {
+  const [state, setState] = useState('idle') // idle | loading | loaded | failed
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    return () => {
+      // cleanup: nothing to remove (widget remains if loaded)
+    }
+  }, [])
+
+  const initWidget = () => {
+    try {
+      if (!document.getElementById('tradingview_chart')) return
+      // show container
+      const el = document.getElementById('tradingview_chart')
+      el.style.display = 'block'
+
+      // if TradingView already present, initialize immediately
+      if (window.TradingView) {
+        try {
+          new window.TradingView.widget({
+            container_id: 'tradingview_chart',
+            width: '100%',
+            height: 360,
+            symbol: 'BINANCE:BTCUSDT',
+            interval: '5',
+            timezone: 'Etc/UTC',
+            theme: 'dark',
+            style: '1',
+            locale: 'en',
+            toolbar_bg: '#111827',
+            enable_publishing: false,
+            allow_symbol_change: true
+          })
+          setState('loaded')
+        } catch (e) {
+          setState('failed')
+          setError(String(e))
+        }
+        return
+      }
+
+      // otherwise inject script
+      setState('loading')
+      const s = document.createElement('script')
+      s.src = 'https://s3.tradingview.com/tv.js'
+      s.type = 'text/javascript'
+      s.async = true
+      s.crossOrigin = 'anonymous'
+      s.onload = () => {
+        try {
+          new window.TradingView.widget({
+            container_id: 'tradingview_chart',
+            width: '100%',
+            height: 360,
+            symbol: 'BINANCE:BTCUSDT',
+            interval: '5',
+            timezone: 'Etc/UTC',
+            theme: 'dark',
+            style: '1',
+            locale: 'en',
+            toolbar_bg: '#111827',
+            enable_publishing: false,
+            allow_symbol_change: true
+          })
+          setState('loaded')
+        } catch (e) {
+          setState('failed')
+          setError(String(e))
+        }
+      }
+      s.onerror = (e) => {
+        setState('failed')
+        setError('script-load-failed')
+      }
+      document.head.appendChild(s)
+    } catch (err) {
+      setState('failed')
+      setError(String(err))
+    }
+  }
+
+  return (
+    <div style={{display:'inline-block'}}>
+      {state === 'idle' && <button className="btn" onClick={initWidget}>Load TradingView</button>}
+      {state === 'loading' && <button className="btn" disabled>Loading...</button>}
+      {state === 'loaded' && <span className="meta">TradingView loaded</span>}
+      {state === 'failed' && <span className="meta" style={{color:'#f87171'}}>Failed: {error}</span>}
+    </div>
+  )
+}
+
 const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
 
 function formatNumber(n) {
@@ -296,6 +389,10 @@ export default function App() {
           <div style={{marginTop:8}}>
             <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
           </div>
+          <div style={{marginTop:8}}>
+            {/* TradingView lazy-load toggle: user clicks to load external widget */}
+            <TradingViewLoader />
+          </div>
         </div>
       </div>
 
@@ -304,6 +401,8 @@ export default function App() {
             {/* Render internal SVG candlestick chart by default to avoid TradingView auto-load */}
             <div style={{width:'100%', height: Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
               <CandlestickChart data={candles} />
+              {/* Hidden TradingView container — shown only after user triggers load */}
+              <div id="tradingview_chart" style={{width:'100%',height:360, display:'none', marginTop:12}}></div>
             </div>
           </div>
 
