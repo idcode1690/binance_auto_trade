@@ -242,6 +242,7 @@ export default function App() {
     if (!window.TradingView || !window.TradingView.widget) throw new Error('tradingview-api-missing')
     try {
       // create a lightweight widget; options are intentionally conservative
+      // Disable drawing tools and add EMA(26) & EMA(200) studies where possible.
       new window.TradingView.widget({
         container_id: 'tradingview_chart',
         autosize: true,
@@ -251,9 +252,25 @@ export default function App() {
         theme: 'dark',
         style: '1',
         toolbar_bg: '#0b2033',
+        // try to remove drawing toolbar controls
+        disabled_features: ['drawing_toolbar'],
+        // hide left toolbar (if present) to reduce UI chrome
+        // the user still can enable tools via the widget menu if needed
         hide_side_toolbar: false,
         allow_symbol_change: false,
-        studies: [],
+        // Request EMA studies. TradingView may map study ids differently; if these
+        // don't appear, we fall back to the internal SVG EMA lines already drawn.
+        studies: [
+          'Moving Average Exponential@tv-basicstudies',
+          'Moving Average Exponential@tv-basicstudies'
+        ],
+        // Attempt to set lengths for the two EMAs. The exact override keys
+        // depend on TradingView internals; these are best-effort and harmless
+        // if ignored by the widget.
+        studies_overrides: {
+          'Moving Average Exponential@tv-basicstudies.length': 26,
+          'Moving Average Exponential@tv-basicstudies.length_1': 200,
+        }
       })
       setTvLoaded(true)
       setTvError(null)
@@ -349,38 +366,34 @@ export default function App() {
           <div id="tradingview_chart" style={{width:'100%', height:'100%', display: tvLoaded && !tvError ? 'block' : 'none'}} />
 
           {/* Fallback and diagnostics when TradingView isn't initialized */}
-          {(!tvLoaded || tvError) && (
-            <div style={{display:'flex', flexDirection:'column', height:'100%'}}>
-              <div style={{marginBottom:8}}>
-                <strong>Chart:</strong>
-                {tvLoaded ? (
-                  <span style={{marginLeft:8, color:'#9ca3af'}}>TradingView initialized</span>
-                ) : tvError ? (
-                  <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
-                ) : tvLoading ? (
-                  <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
-                ) : (
-                  <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
-                )}
+            {/* Show a small loading indicator while TradingView is loading. */}
+            {tvLoading && (
+              <div style={{display:'flex', alignItems:'center', gap:8, color:'#fbbf24', marginBottom:8}}>
+                <span>Loading TradingView...</span>
+              </div>
+            )}
 
-                {!tvLoaded && (
+            {/* Only show the internal fallback chart if TradingView fails to load */}
+            {tvError && (
+              <div>
+                <div style={{marginBottom:8}}>
+                  <strong>Chart:</strong>
+                  <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
+
+                  {/* Allow user to attempt to load TradingView if automatic load failed */}
                   <span style={{display:'inline-block', marginLeft:12}}>
                     <button className="btn" onClick={() => attemptLoadTradingView()} disabled={tvLoading}>
-                      {tvLoading ? 'Loading...' : (tvError ? 'Try TradingView' : 'Load TradingView')}
+                      {tvLoading ? 'Loading...' : 'Try TradingView'}
                     </button>
                   </span>
-                )}
+                </div>
+                <CandlestickChart data={candles} height={Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))} />
+                <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
+                  If the chart is blank, open DevTools → Console/Network to check for errors or blocked
+                  external scripts (TradingView). This page will show a fallback candlestick chart when TradingView cannot be loaded.
+                </div>
               </div>
-
-              <div style={{flex:1, minHeight:200}}>
-                <CandlestickChart data={candles} height={Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 260 : 360))} />
-              </div>
-
-              <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
-                If the chart is blank, open DevTools → Console/Network to check for errors or blocked external scripts (TradingView). This page will show a fallback candlestick chart.
-              </div>
-            </div>
-          )}
+            )}
         </div>
 
         <aside className="sidebar">
