@@ -42,7 +42,22 @@ export default function App() {
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
   const symbol = (symbolStr && symbolStr.trim().toUpperCase()) || 'BTCUSDT'
-  const price = lastPrice == null ? '' : Number(lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })
+  const formatPrice = (val) => {
+    if (val == null) return ''
+    const n = Number(val)
+    if (!isFinite(n)) return ''
+    const abs = Math.abs(n)
+    let maxDigits = 2
+    if (abs === 0) return '0'
+    // choose precision based on magnitude to avoid hiding small prices
+    if (abs < 0.0001) maxDigits = 8
+    else if (abs < 0.01) maxDigits = 8
+    else if (abs < 1) maxDigits = 6
+    else if (abs < 1000) maxDigits = 2
+    else maxDigits = 2
+    return n.toLocaleString(undefined, { maximumFractionDigits: maxDigits })
+  }
+  const price = formatPrice(lastPrice)
   const change = ''
   const candles = 0
 
