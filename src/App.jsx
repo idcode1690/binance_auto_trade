@@ -51,7 +51,7 @@ export default function App() {
 
   return (
     <div className="container body-root">
-      <Hero title="Binance BTC/USDT" subtitle="1m candles · EMA26 / EMA200" />
+      <Hero title="Binance BTC/USDT" />
 
       <main className="main-grid">
         <section className="main-chart card">
