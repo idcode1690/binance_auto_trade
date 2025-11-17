@@ -207,268 +207,79 @@ export default function App() {
           if (pendingFrameRef.current) return
           pendingFrameRef.current = window.requestAnimationFrame(() => {
             pendingFrameRef.current = null
-            const temp = latestTempRef.current
-            if (!temp) return
+            import React from 'react'
 
-            // update last candle in state without re-computing full history
-            setCandles(prev => {
-              const base = prev.slice()
-              if (base.length === 0 || base[base.length - 1].time !== temp.time) {
-                base.push(temp)
-              } else {
-                base[base.length - 1] = temp
-              }
-              return base
-            })
+            /*
+              Redesigned front-end: Minimal, responsive dashboard shell.
+              - Removed real-time websocket and heavy charting logic per request.
+              - This app provides a clean, mobile-first layout that you can iterate on.
+            */
 
-            // update displayed price and live EMA values together (keeps them identical)
-            try {
-              setDisplayPrice(temp.close)
-              if (temp._liveEma26 != null) {
-                liveEma26Ref.current = temp._liveEma26
-                setLiveEma26(temp._liveEma26)
-              }
-              if (temp._liveEma200 != null) {
-                liveEma200Ref.current = temp._liveEma200
-                setLiveEma200(temp._liveEma200)
-              }
-
-            } catch (e) {
-              // ignore
+            function Hero({ title, subtitle }) {
+              return (
+                <header className="hero">
+                  <div>
+                    <h1 className="hero-title">{title}</h1>
+                    <p className="hero-sub">{subtitle}</p>
+                  </div>
+                  <nav className="hero-actions">
+                    <button className="btn secondary">Connect</button>
+                  </nav>
+                </header>
+              )
             }
-          })
-        }
 
-        // update current 5-min candle
-        const bucket = floorTo5MinSec(ts)
-        const prev = currentCandleRef.current
-        if (!prev || prev.time !== bucket) {
-          // close previous candle (if exists)
-          if (prev) {
-            // push closed candle
-            const closed = { ...prev }
-            // compute EMAs on closed candle close using refs (deterministic)
-            const close = closed.close
-            const prevE26 = ema26Ref.current
-            const prevE200 = ema200Ref.current
-            const nextE26 = prevE26 == null ? close : alpha26 * close + (1 - alpha26) * prevE26
-            const nextE200 = prevE200 == null ? close : alpha200 * close + (1 - alpha200) * prevE200
+            function StatCard({ label, value, hint }) {
+              return (
+                <div className="stat-card">
+                  <div className="stat-value">{value}</div>
+                  <div className="stat-label">{label}</div>
+                  {hint && <div className="stat-hint">{hint}</div>}
+                </div>
+              )
+            }
 
-            // update refs and state
-            ema26Ref.current = nextE26
-            ema200Ref.current = nextE200
-            setEma26(nextE26)
-            setEma200(nextE200)
+            export default function App() {
+              // Placeholder data for the redesigned shell
+              const price = '—'
+              const change = '—'
+              const candles = 0
 
-            // attach EMA values to closed candle and replace last entry
-            // (if it already represents the same time) or push otherwise.
-            // This prevents duplicating a closed candle and ensures the
-            // live/current candle remains at the right-most position.
-            closed.ema26 = nextE26
-            closed.ema200 = nextE200
-            setCandles(cs => {
-              const out = cs.slice()
-              if (out.length > 0 && out[out.length - 1].time === closed.time) {
-                out[out.length - 1] = closed
-              } else {
-                out.push(closed)
-              }
-              return out
-            })
+              return (
+                <div className="container body-root">
+                  <Hero title="Binance BTC/USDT" subtitle="5m candles · EMA26 / EMA200" />
 
-            // detect cross right here based on closed candle EMAs
-            if (prevE26 != null && prevE200 != null) {
-              const prevDiff = prevE26 - prevE200
-              const diff = nextE26 - nextE200
+                  <main className="main-grid">
+                    <section className="main-chart card">
+                      <div className="dashboard">
+                        <div className="price-row">
+                          <div>
+                            <div className="price">{price}</div>
+                            <div className="chg">{change}</div>
+                          </div>
+                        </div>
+
+                        <div className="dashboard-body">
+                          <div className="stats">
+                            <StatCard label="Latest" value={price} />
+                            <StatCard label="Change" value={change} />
+                            <StatCard label="Candles" value={candles} />
+                          </div>
+                          <div style={{marginTop:12}} className="small meta">This is a redesigned front-end shell. Connect live data or add features as needed.</div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <aside className="sidebar card">
+                      <div className="sidebar-inner">
+                        <h3 style={{marginTop:0}}>Cross Alerts</h3>
+                        <div className="meta">No alerts yet.</div>
+                      </div>
+                    </aside>
+                  </main>
+                </div>
+              )
+            }
               if (prevDiff <= 0 && diff > 0) {
+
                 const item = { type: 'bull', price: close, time: new Date(closed.time * 1000).toISOString() }
-                setAlerts(a => [item, ...a].slice(0, 50))
-              } else if (prevDiff >= 0 && diff < 0) {
-                const item = { type: 'bear', price: close, time: new Date(closed.time * 1000).toISOString() }
-                setAlerts(a => [item, ...a].slice(0, 50))
-              }
-            }
-          }
-          // start new candle
-          currentCandleRef.current = { time: bucket, open: price, high: price, low: price, close: price }
-          // compute live EMAs (tick-based) using latest live refs
-          const prevLive26 = liveEma26Ref.current
-          const prevLive200 = liveEma200Ref.current
-          const liveNext26 = prevLive26 == null ? price : alphaLive26 * price + (1 - alphaLive26) * prevLive26
-          const liveNext200 = prevLive200 == null ? price : alphaLive200 * price + (1 - alphaLive200) * prevLive200
-          liveEma26Ref.current = liveNext26
-          liveEma200Ref.current = liveNext200
-          setLiveEma26(liveNext26)
-          setLiveEma200(liveNext200)
-          // also schedule immediate UI update for new candle (include live EMA)
-          // compute intra-bar progress [0..1] for smoother live EMA interpolation
-          const progress = Math.min(1, Math.max(0, (ts / 1000 - bucket) / 300))
-          scheduleRenderUpdate({ ...currentCandleRef.current, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200, _progress: progress })
-        } else {
-          // update existing candle
-          const c = { ...currentCandleRef.current }
-          c.close = price
-          c.high = Math.max(c.high, price)
-          c.low = Math.min(c.low, price)
-          currentCandleRef.current = c
-          // update live EMAs with this tick price
-          const prevLive26 = liveEma26Ref.current
-          const prevLive200 = liveEma200Ref.current
-          const liveNext26 = prevLive26 == null ? price : alphaLive26 * price + (1 - alphaLive26) * prevLive26
-          const liveNext200 = prevLive200 == null ? price : alphaLive200 * price + (1 - alphaLive200) * prevLive200
-          liveEma26Ref.current = liveNext26
-          liveEma200Ref.current = liveNext200
-          setLiveEma26(liveNext26)
-          setLiveEma200(liveNext200)
-          // schedule immediate UI update for the updated candle (include live EMA)
-          const progress = Math.min(1, Math.max(0, (ts / 1000 - bucket) / 300))
-          scheduleRenderUpdate({ ...c, ema26: ema26, ema200: ema200, _liveEma26: liveNext26, _liveEma200: liveNext200, _progress: progress })
-        }
-      } catch (err) { console.error('parse', err) }
-    }
-  }
-
-  // Previously we attached EMAs in an effect; EMAs and crosses are now computed synchronously
-  // when a 5-minute candle closes to ensure crosses are based on closed candles only.
-
-  function stopWs() {
-    if (wsRef.current) {
-      try { wsRef.current.close() } catch (e) {}
-      wsRef.current = null
-    }
-    setConnected(false)
-  }
-
-  // The UI now updates via the WebSocket -> scheduleRenderUpdate rAF batch.
-  // Removed the separate 250ms interval sync so price and chart are updated
-  // together in the same animation frame for identical timing.
-
-  // No TradingView auto-load: we always use local LightweightChart
-
-  // TradingView removed: charting is handled entirely by LightweightChart component
-
-  // Load recent historical 5m candles from Binance REST API on mount
-  useEffect(() => {
-    let cancelled = false
-    async function fetchHistory() {
-      try {
-        const resp = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=200')
-        if (!resp.ok) throw new Error(`klines fetch failed: ${resp.status}`)
-        const data = await resp.json()
-        // data format: [ [ openTime, open, high, low, close, ... ], ... ]
-        const parsed = data.map(item => {
-          const openTimeMs = item[0]
-          return {
-            time: Math.floor(openTimeMs / 1000),
-            open: parseFloat(item[1]),
-            high: parseFloat(item[2]),
-            low: parseFloat(item[3]),
-            close: parseFloat(item[4]),
-            // ema placeholders
-            ema26: null,
-            ema200: null,
-          }
-        })
-
-        // compute EMA series over closes
-        let prev26 = null
-        let prev200 = null
-        const alpha26Local = 2 / (26 + 1)
-        const alpha200Local = 2 / (200 + 1)
-        for (let i = 0; i < parsed.length; i++) {
-          const close = parsed[i].close
-          prev26 = prev26 == null ? close : alpha26Local * close + (1 - alpha26Local) * prev26
-          prev200 = prev200 == null ? close : alpha200Local * close + (1 - alpha200Local) * prev200
-          parsed[i].ema26 = prev26
-          parsed[i].ema200 = prev200
-        }
-
-        if (cancelled) return
-        // set refs and state
-        ema26Ref.current = prev26
-        ema200Ref.current = prev200
-        setEma26(prev26)
-        setEma200(prev200)
-        setCandles(parsed)
-        // initialize displayed price to the most recent close so price and chart start synced
-        try {
-          const last = parsed[parsed.length - 1]
-          if (last && last.close != null) {
-            setDisplayPrice(last.close)
-            setLastPrice(last.close)
-          }
-
-          // Create an in-progress (live) candle from the most recent closed candle
-          // so the chart immediately shows the current bar (rather than waiting
-          // for the first incoming websocket tick after load).
-          try {
-            const now = Date.now()
-            const currentBucket = floorTo5MinSec(now)
-            if (last && last.time < currentBucket) {
-              const temp = { time: currentBucket, open: last.close, high: last.close, low: last.close, close: last.close }
-              // initialize live EMA refs based on closed EMAs so live lines start coherent
-              const prevLive26 = ema26Ref.current
-              const prevLive200 = ema200Ref.current
-              const liveNext26 = prevLive26 == null ? temp.close : alphaLive26 * temp.close + (1 - alphaLive26) * prevLive26
-              const liveNext200 = prevLive200 == null ? temp.close : alphaLive200 * temp.close + (1 - alphaLive200) * prevLive200
-              liveEma26Ref.current = liveNext26
-              liveEma200Ref.current = liveNext200
-              setLiveEma26(liveNext26)
-              setLiveEma200(liveNext200)
-
-              // push temp candle onto the existing parsed history so chart renders it
-              setCandles(cs => {
-                const out = cs.slice()
-                if (out.length === 0 || out[out.length - 1].time !== temp.time) out.push(temp)
-                else out[out.length - 1] = temp
-                return out
-              })
-              // set ref so subsequent websocket logic will update/close it properly
-              currentCandleRef.current = temp
-            }
-          } catch (e) { /* ignore */ }
-        } catch (e) {}
-      } catch (err) {
-        console.warn('failed to fetch klines', err)
-      }
-    }
-    fetchHistory()
-    return () => { cancelled = true }
-  }, [])
-
-  return (
-    <div className="container body-root">
-      <TopBar
-        title={"Binance BTC/USDT — 5m Candles + EMA26/200"}
-        subtitle={"Real-time trade price from Binance (aggregated to 5m candles)"}
-        displayPrice={displayPrice}
-        lastPrice={lastPrice}
-        ema26={ema26}
-        ema200={ema200}
-        connected={connected}
-        startWs={startWs}
-        stopWs={stopWs}
-      />
-
-      <div className="main-grid">
-          <div className="main-chart card no-frame">
-            <DashboardCard
-              candles={candles}
-              displayPrice={displayPrice}
-              lastPrice={lastPrice}
-              ema26={ema26}
-              ema200={ema200}
-              connected={connected}
-              startWs={startWs}
-              stopWs={stopWs}
-            />
-          </div>
-
-        <aside className="sidebar">
-          <AlertsList alerts={alerts} />
-        </aside>
-      </div>
-    </div>
-  )
-}
-
