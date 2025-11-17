@@ -1,0 +1,39 @@
+{
+  "console": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    }
+  ],
+  "errors": [],
+  "requests": [],
+  "responses": [
+    {
+      "url": "https://idcode1690.github.io/favicon.ico",
+      "status": 404
+    }
+  ],
+  "root": {
+    "exists": true,
+    "childCount": 1,
+    "inner": "Binance BTC/USDT — 5m Candles + EMA26/200\nReal-time trade price from Binance (aggregated to 5m candles)\nEMA26 (closed): 95,171.13EMA26 (live): 94,999.35EMA200 \n(closed): 94,821.46EMA200 (live): 94,994.9Bull Cross ▲\n94,999.51\nStatus: Connected\nStop\nLoad TradingView\nCross Alerts (5m)\nLatest first (keeps 50)\nNo crosses detected yet."
+  },
+  "svg": {
+    "svgCount": 1,
+    "polylineCount": 2,
+    "polylines": [
+      {
+        "points": 199,
+        "stroke": "#60a5fa",
+        "strokeWidth": "3",
+        "strokeDasharray": null
+      },
+      {
+        "points": 199,
+        "stroke": "#f97316",
+        "strokeWidth": "3",
+        "strokeDasharray": null
+      }
+    ]
+  }
+}
