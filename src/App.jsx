@@ -37,6 +37,9 @@ export default function App() {
   const [holdingsStr, setHoldingsStr] = useState(() => {
     try { return localStorage.getItem('holdings') || '0' } catch (e) { return '0' }
   })
+  const [futuresBalanceStr, setFuturesBalanceStr] = useState(() => {
+    try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
+  })
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
   })
