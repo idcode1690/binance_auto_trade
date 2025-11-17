@@ -203,13 +203,19 @@ export default function App() {
                       <div className="positions-table" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,overflow:'hidden'}}>
                         <div style={{display:'flex',padding:'8px 10px',background:'rgba(0,0,0,0.02)',fontSize:12,fontWeight:700}}>
                           <div style={{flex:2}}>Symbol</div>
-                          <div style={{flex:1,textAlign:'right'}}>Side</div>
-                          <div style={{flex:1,textAlign:'right'}}>Qty</div>
-                          <div style={{flex:1,textAlign:'right'}}>Entry</div>
-                          <div style={{flex:1,textAlign:'right'}}>Notional</div>
-                          <div style={{flex:1,textAlign:'right'}}>PNL (USDT)</div>
-                          <div style={{flex:1,textAlign:'right'}}>ROI %</div>
+                          <div style={{flex:1,textAlign:'right'}}>Contract</div>
                           <div style={{flex:1,textAlign:'right'}}>Lev</div>
+                          <div style={{flex:1,textAlign:'right'}}>Size</div>
+                          <div style={{flex:1,textAlign:'right'}}>Entry Price</div>
+                          <div style={{flex:1,textAlign:'right'}}>Break Even</div>
+                          <div style={{flex:1,textAlign:'right'}}>Mark Price</div>
+                          <div style={{flex:1,textAlign:'right'}}>Liq.Price</div>
+                          <div style={{flex:1,textAlign:'right'}}>Margin Ratio</div>
+                          <div style={{flex:1,textAlign:'right'}}>Margin</div>
+                          <div style={{flex:1,textAlign:'right'}}>PNL (ROI %)</div>
+                          <div style={{flex:1,textAlign:'right'}}>Est. Funding</div>
+                          <div style={{flex:1,textAlign:'right'}}>Margin Type</div>
+                          <div style={{flex:1,textAlign:'right'}}>TP/SL</div>
                         </div>
                         {open.map(p => {
                           const amt = Number(p.positionAmt) || 0
@@ -226,16 +232,27 @@ export default function App() {
                             const usedMargin = notional / lev
                             if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
                           }
+                          const markPrice = p.markPrice || 0
+                          const liq = p.liquidationPrice || p.liqPrice || '--'
+                          const breakEven = entry || 0
+                          const estFunding = (p.fundingRate && notional) ? (p.fundingRate * notional) : 0
+                          const pnlColor = upl >= 0 ? 'var(--bull)' : 'var(--bear)'
                           return (
                             <div key={p.symbol} style={{display:'flex',padding:'8px 10px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
                               <div style={{flex:2}}>{p.symbol}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{side}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{amt}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{notional ? notional.toFixed(2) : '0.00'}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{roiPct != null ? `${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}` : '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>Perp</div>
                               <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{breakEven ? breakEven.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{markPrice ? Number(markPrice).toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{liq || '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{initMargin && notional ? `${((initMargin / notional)*100).toFixed(2)}%` : '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{initMargin ? `${initMargin.toFixed(2)} USDT` : '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}><span style={{color:pnlColor,fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</span><div style={{fontSize:12,color:'var(--muted)'}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div></div>
+                              <div style={{flex:1,textAlign:'right'}}>{estFunding ? `${estFunding.toFixed(4)} USDT` : '0.00 USDT'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{'-- / --'}</div>
                             </div>
                           )
                         })}

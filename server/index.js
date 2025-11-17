@@ -100,6 +100,27 @@ app.get('/api/futures/account', async (req, res) => {
         isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsolatedWallet) : undefined)
       })) : []
     }
+    // enrich positions with markPrice and fundingRate where possible
+    try {
+      const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
+      if (syms.length) {
+        const promises = syms.map(s => axios.get(`${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`).then(r => ({ symbol: s, data: r.data })).catch(() => null))
+        const results = await Promise.all(promises)
+        const map = new Map()
+        for (const r of results) {
+          if (r && r.data) map.set(r.symbol, r.data)
+        }
+        out.positions = out.positions.map(p => {
+          const info = map.get(p.symbol)
+          if (info) {
+            return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
+          }
+          return p
+        })
+      }
+    } catch (e) {
+      // ignore enrichment errors
+    }
     res.json(out)
   } catch (err) {
     const remote = err && err.response
