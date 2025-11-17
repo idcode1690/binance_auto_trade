@@ -132,10 +132,15 @@ export default function App() {
   // Subscribe to server-sent account updates for near-real-time positions
   useEffect(() => {
     let es
+    // prefer explicit backend address so static host (4740) can still receive SSE from backend (3000)
     try {
-      es = new EventSource('/api/futures/sse')
+      es = new EventSource('http://127.0.0.1:3000/api/futures/sse')
     } catch (e) {
-      return
+      try {
+        es = new EventSource('/api/futures/sse')
+      } catch (ee) {
+        return
+      }
     }
     const onAccount = (e) => {
       try {
