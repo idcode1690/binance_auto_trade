@@ -16,6 +16,17 @@ const USE_TESTNET = String(process.env.BINANCE_TESTNET || '').toLowerCase() === 
 // Allow overriding the base URLs via env vars for flexibility
 const FUTURES_API_BASE = process.env.BINANCE_FUTURES_API_BASE || (USE_TESTNET ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com')
 const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://stream.binance.com:9443')
+const WebSocketClient = require('ws')
+
+// SSE clients and latest account snapshot cache
+const sseClients = new Set()
+let latestAccountSnapshot = null
+let userData = {
+  listenKey: null,
+  ws: null,
+  keepaliveInterval: null,
+  reconnectTimer: null
+}
 
 function sign(queryString) {
   return crypto.createHmac('sha256', API_SECRET).update(queryString).digest('hex')
@@ -121,6 +132,8 @@ app.get('/api/futures/account', async (req, res) => {
     } catch (e) {
       // ignore enrichment errors
     }
+    // cache latest snapshot for SSE clients
+    latestAccountSnapshot = out
     res.json(out)
   } catch (err) {
     const remote = err && err.response
@@ -146,6 +159,145 @@ app.get('/api/config', (req, res) => {
     futuresWsBase: FUTURES_WS_BASE
   })
 })
+
+// SSE endpoint for pushing account/position updates
+app.get('/api/futures/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders && res.flushHeaders()
+  const id = Date.now()
+  sseClients.add(res)
+  // send current snapshot if available
+  if (latestAccountSnapshot) {
+    try { res.write(`data: ${JSON.stringify(latestAccountSnapshot)}\n\n`) } catch (e) {}
+  }
+  req.on('close', () => { sseClients.delete(res) })
+})
+
+function broadcastAccountUpdate(obj) {
+  latestAccountSnapshot = obj
+  const payload = `data: ${JSON.stringify(obj)}\n\n`
+  for (const client of sseClients) {
+    try { client.write(payload) } catch (e) { sseClients.delete(client) }
+  }
+}
+
+// create and maintain futures user-data stream (listenKey)
+async function startUserDataStream() {
+  if (!API_KEY) return
+  try {
+    // create listen key
+    const url = `${FUTURES_API_BASE}/fapi/v1/listenKey`
+    const resp = await axios.post(url, null, { headers: { 'X-MBX-APIKEY': API_KEY } })
+    const listenKey = resp && resp.data && (resp.data.listenKey || resp.data) ? (resp.data.listenKey || resp.data) : null
+    if (!listenKey) return
+    userData.listenKey = listenKey
+
+    // open websocket to user-data stream
+    try { if (userData.ws) { try { userData.ws.close() } catch (e) {} userData.ws = null } } catch (e) {}
+    const wsUrl = `${FUTURES_WS_BASE}/ws/${listenKey}`
+    const ws = new WebSocketClient(wsUrl)
+    userData.ws = ws
+
+    ws.on('open', () => {
+      console.log('user-data ws open')
+      // immediate fetch of account snapshot to seed cache
+      signedGet('/fapi/v2/account').then(d => {
+        const out = {
+          totalWalletBalance: typeof d.totalWalletBalance !== 'undefined' ? Number(d.totalWalletBalance) : null,
+          totalUnrealizedProfit: typeof d.totalUnrealizedProfit !== 'undefined' ? Number(d.totalUnrealizedProfit) : null,
+          positions: Array.isArray(d.positions) ? d.positions.map(p => ({
+            symbol: p.symbol,
+            positionAmt: Number(p.positionAmt) || 0,
+            entryPrice: Number(p.entryPrice) || 0,
+            unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+            leverage: p.leverage ? Number(p.leverage) : undefined,
+            marginType: p.marginType || undefined,
+            positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
+            isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
+          })) : []
+        }
+        latestAccountSnapshot = out
+        broadcastAccountUpdate(out)
+      }).catch(() => {})
+    })
+
+    ws.on('message', async (msg) => {
+      try {
+        const data = JSON.parse(msg.toString())
+        // Binance wraps user-data messages directly
+        const evt = data.e || (data.data && data.data.e) || null
+        // If ACCOUNT_UPDATE or ORDER_TRADE_UPDATE, fetch full account snapshot
+        if (evt === 'ACCOUNT_UPDATE' || evt === 'ORDER_TRADE_UPDATE') {
+          try {
+            const d = await signedGet('/fapi/v2/account')
+            const out = {
+              totalWalletBalance: typeof d.totalWalletBalance !== 'undefined' ? Number(d.totalWalletBalance) : null,
+              totalUnrealizedProfit: typeof d.totalUnrealizedProfit !== 'undefined' ? Number(d.totalUnrealizedProfit) : null,
+              positions: Array.isArray(d.positions) ? d.positions.map(p => ({
+                symbol: p.symbol,
+                positionAmt: Number(p.positionAmt) || 0,
+                entryPrice: Number(p.entryPrice) || 0,
+                unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+                leverage: p.leverage ? Number(p.leverage) : undefined,
+                marginType: p.marginType || undefined,
+                positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
+                isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
+              })) : []
+            }
+            // try to enrich with premiumIndex
+            try {
+              const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
+              if (syms.length) {
+                const promises = syms.map(s => axios.get(`${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`).then(r => ({ symbol: s, data: r.data })).catch(() => null))
+                const results = await Promise.all(promises)
+                const map = new Map()
+                for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
+                out.positions = out.positions.map(p => {
+                  const info = map.get(p.symbol)
+                  if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
+                  return p
+                })
+              }
+            } catch (e) {}
+            broadcastAccountUpdate(out)
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (e) {}
+    })
+
+    ws.on('close', (code, reason) => {
+      console.warn('user-data ws closed', code, reason)
+      // try reconnect after delay
+      if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
+      userData.reconnectTimer = setTimeout(() => startUserDataStream(), 5000)
+    })
+
+    ws.on('error', (err) => {
+      console.warn('user-data ws error', err && err.message)
+      try { ws.terminate() } catch (e) {}
+    })
+
+    // start keepalive: PUT every 30 minutes
+    if (userData.keepaliveInterval) clearInterval(userData.keepaliveInterval)
+    userData.keepaliveInterval = setInterval(async () => {
+      try {
+        await axios.put(`${FUTURES_API_BASE}/fapi/v1/listenKey`, `listenKey=${userData.listenKey}`, { headers: { 'X-MBX-APIKEY': API_KEY, 'Content-Type': 'application/x-www-form-urlencoded' } })
+      } catch (e) { }
+    }, 1000 * 60 * 30)
+
+  } catch (err) {
+    console.warn('startUserDataStream failed', err && err.message)
+    if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
+    userData.reconnectTimer = setTimeout(() => startUserDataStream(), 10000)
+  }
+}
+
+// start the user-data stream if we have keys
+startUserDataStream()
 
 app.post('/api/futures/order', async (req, res) => {
   try {
