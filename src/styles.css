@@ -65,30 +65,6 @@ body {
 }
 .card.no-frame { background:transparent; border:none; padding:0 }
 
-/* Defensive CSS: hide common TradingView toolbars/palettes if present in the host DOM */
-.no-frame .tv-drawing-toolbar,
-.no-frame .tv-floating-toolbar,
-.no-frame .chart-controls,
-.no-frame .chart-widget__toolbar,
-.no-frame .tv-sidebar,
-.no-frame .js-side-toolbar,
-.no-frame .apply-common-tooltip,
-.no-frame .tradingview-widget-container__header {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
-/* also hide buttons by common ARIA / title attributes that TradingView sometimes adds */
-.no-frame button[title*="Draw"],
-.no-frame [aria-label*="Draw"],
-.no-frame button[title*="Indicators"],
-.no-frame [aria-label*="Indicators"],
-.no-frame button[title*="Compare"],
-.no-frame [aria-label*="Compare"] {
-  display: none !important;
-}
-
 .meta { color:var(--muted); }
 .alerts { list-style:none; padding:0; margin:0 }
 .alert-item { padding:8px 0; border-bottom:1px dashed rgba(255,255,255,0.03) }
@@ -98,8 +74,8 @@ body {
 .bull { color:var(--success) }
 .bear { color:var(--danger) }
 
-/* make tradingview/chart area expand to fill chart column */
-#tradingview_chart, .candles-chart { width:100%; height:100%; flex:1 1 auto }
+/* make chart area expand to fill chart column */
+.candles-chart, #chart-area { width:100%; height:100%; flex:1 1 auto }
 
 /* responsive: collapse sidebar on narrow screens */
 @media (max-width:900px){

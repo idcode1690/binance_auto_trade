@@ -13,10 +13,7 @@ function floorTo5MinSec(ms) {
 }
 
 export default function App() {
-  // DEV: force using internal SVG fallback to avoid external TradingView loading issues
-  // Set to true to force the app to show the internal chart (useful when tv.js is blocked)
-  // Set to false to attempt loading TradingView from CDN/local script.
-  const FORCE_FALLBACK = false
+  // Use internal chart renderer (Lightweight) by default
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [displayPrice, setDisplayPrice] = useState(null)
@@ -44,12 +41,7 @@ export default function App() {
   const pendingFrameRef = useRef(null)
   const latestTempRef = useRef(null)
 
-  // TradingView diagnostics state (visible fallback if script blocked)
-  const [tvLoaded, setTvLoaded] = useState(false)
-  const [tvError, setTvError] = useState(null)
-  const [tvLoading, setTvLoading] = useState(false)
-  // chart engine toggle: true = lightweight-charts, false = TradingView
-  const [useLightweight, setUseLightweight] = useState(true)
+  // No external TradingView widget used; we render charts locally
 
   // EMA smoothing factors for period counts (periods are number of 5-min candles)
   const alpha26 = 2 / (26 + 1)
@@ -217,201 +209,9 @@ export default function App() {
   // Removed the separate 250ms interval sync so price and chart are updated
   // together in the same animation frame for identical timing.
 
-  // TradingView load effect: initialize widget or fall back to internal chart
-  useEffect(() => {
-    // Try to auto-load TradingView script once on mount, but do it safely.
-    // If the load fails (CSP/blocked/parentNode issues), we fall back to the internal SVG chart.
-    let cancelled = false
-    async function tryAutoLoad() {
-      // If developer forced fallback, skip loading TradingView entirely
-      if (FORCE_FALLBACK) {
-        setTvError('forced-fallback')
-        setTvLoaded(false)
-        return
-      }
-      // small delay to let the DOM settle
-      await new Promise(r => setTimeout(r, 250))
-      if (cancelled) return
-      attemptLoadTradingView().catch(err => {
-        if (cancelled) return
-        console.warn('TradingView auto-load failed', err)
-        setTvError(err && err.message ? err.message : String(err))
-        setTvLoaded(false)
-      })
-    }
-    tryAutoLoad()
-    return () => { cancelled = true }
-  }, [])
+  // No TradingView auto-load: we always use local LightweightChart
 
-  // load script helper: tries local first, then CDN; resolves when script loaded
-  async function loadTvScript() {
-    if (window.TradingView) return // already present
-    const trySrcs = [
-      // local copy (relative path) - may not be available on GitHub Pages if publishing mismatch
-      './tv.js',
-      // official CDN fallback
-      'https://s3.tradingview.com/tv.js',
-      'https://s.tradingview.com/tv.js'
-    ]
-    for (const src of trySrcs) {
-      try {
-        await new Promise((resolve, reject) => {
-          const existing = Array.from(document.getElementsByTagName('script')).find(s => s.src && s.src.indexOf(src) !== -1)
-          if (existing) {
-            existing.addEventListener('load', () => resolve())
-            existing.addEventListener('error', () => reject(new Error('script load error')))
-            // if it's already complete, resolve
-            if ((existing.readyState && /loaded|complete/.test(existing.readyState)) || existing.dataset.loaded === '1') return resolve()
-            return
-          }
-          const s = document.createElement('script')
-          s.type = 'text/javascript'
-          s.src = src
-          s.async = true
-          s.crossOrigin = 'anonymous'
-          s.onload = () => { s.dataset.loaded = '1'; resolve() }
-          s.onerror = () => reject(new Error('failed to load ' + src))
-          document.head.appendChild(s)
-        })
-        // loaded, ensure TradingView exists
-        if (window.TradingView) return
-      } catch (err) {
-        console.warn('tv script load failed for', src, err)
-        // try next source
-      }
-    }
-    throw new Error('tvjs-not-found')
-  }
-
-  // Wait for the chart container to have a parentNode and be attached
-  function waitForContainer(maxRetries = 10, delayMs = 200) {
-    return new Promise((resolve, reject) => {
-      let attempts = 0
-      function check() {
-        const el = document.getElementById('tradingview_chart')
-        if (el && el.parentNode) return resolve(el)
-        attempts++
-        if (attempts >= maxRetries) return reject(new Error('container-missing'))
-        setTimeout(check, delayMs)
-      }
-      check()
-    })
-  }
-
-  async function initTradingViewWidget() {
-    // Ensure global TradingView is available and container exists
-    await waitForContainer()
-    if (!window.TradingView || !window.TradingView.widget) throw new Error('tradingview-api-missing')
-    try {
-      // create a lightweight widget; options are intentionally conservative
-      // Disable drawing tools and add EMA(26) & EMA(200) studies where possible.
-      // create widget and keep a reference so we can programmatically add studies
-      const tvWidget = new window.TradingView.widget({
-        container_id: 'tradingview_chart',
-        autosize: true,
-        symbol: 'BINANCE:BTCUSDT',
-        interval: '5',
-        timezone: 'Etc/UTC',
-        theme: 'dark',
-        style: '1',
-        toolbar_bg: '#0b2033',
-        // hide side toolbar and disable common UI features so the tool palette is removed
-        hide_side_toolbar: true,
-        disabled_features: [
-          'header_widget',
-          'header_compare',
-          'header_symbol_search',
-          'header_indicators',
-          'timeframes_toolbar',
-          'left_toolbar',
-          'context_menus',
-          'control_bar',
-          'drawing_toolbar',
-          'show_hide_button_in_legend',
-        ],
-        allow_symbol_change: false,
-        // keep studies empty here; we add EMAs programmatically once chart ready
-      })
-
-      // when the chart is ready, programmatically add two EMA studies (26 and 200)
-      try {
-        tvWidget.onChartReady(() => {
-          try {
-            // createStudy(name, is_price_study, indent, inputsArray, options, callback)
-            // Add EMA(26)
-            if (tvWidget && tvWidget.chart) {
-              try { tvWidget.chart().createStudy('Moving Average Exponential', false, false, [26], null, () => {}) } catch (e) { console.warn('EMA26 createStudy failed', e) }
-              try { tvWidget.chart().createStudy('Moving Average Exponential', false, false, [200], null, () => {}) } catch (e) { console.warn('EMA200 createStudy failed', e) }
-            }
-            // defensive: remove any visible drawing/tool palettes that the widget adds to the host DOM
-            try {
-              // run a short-lived repetitive hide to catch late-added controls
-              const selectors = [
-                '.tv-drawing-toolbar',
-                '.tv-floating-toolbar',
-                '.chart-controls',
-                '.chart-widget__toolbar',
-                '.tv-sidebar',
-                '.js-side-toolbar',
-                '.apply-common-tooltip',
-                '.tradingview-widget-container__header',
-                '.tv-header__right-pane',
-                '.tv-header__first-line'
-              ]
-              const labels = ['Drawings', 'Objects Tree', 'Object tree', 'Compare', 'Indicators', 'Draw']
-              function hideOnce() {
-                selectors.forEach(sel => {
-                  document.querySelectorAll(sel).forEach(el => {
-                    try { el.style.display = 'none'; el.style.visibility = 'hidden'; } catch (e) {}
-                  })
-                })
-                labels.forEach(lbl => {
-                  document.querySelectorAll(`button[title="${lbl}"], [aria-label="${lbl}"]`).forEach(el => {
-                    try { el.style.display = 'none'; } catch (e) {}
-                  })
-                })
-              }
-              hideOnce()
-              const hid = setInterval(hideOnce, 300)
-              setTimeout(() => clearInterval(hid), 2000)
-            } catch (err) { console.warn('failed to hide tv toolbars', err) }
-          } catch (err) {
-            console.warn('failed to add EMA studies', err)
-          }
-        })
-      } catch (err) {
-        console.warn('tvWidget.onChartReady not available', err)
-      }
-      setTvLoaded(true)
-      setTvError(null)
-    } catch (err) {
-      throw err
-    }
-  }
-
-  async function attemptLoadTradingView() {
-    if (tvLoaded) return
-    setTvLoading(true)
-    setTvError(null)
-    try {
-      await loadTvScript()
-      await initTradingViewWidget()
-    } finally {
-      setTvLoading(false)
-    }
-  }
-
-  // When the user toggles to TradingView, attempt loading it automatically
-  useEffect(() => {
-    if (!useLightweight) {
-      // try to load tradingview when requested by user
-      attemptLoadTradingView().catch(err => {
-        console.warn('TradingView load requested but failed', err)
-      })
-    }
-    // do not auto-unload when switching back to lightweight; leaving the widget is fine
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useLightweight])
+  // TradingView removed: charting is handled entirely by LightweightChart component
 
   // Load recent historical 5m candles from Binance REST API on mount
   useEffect(() => {
@@ -495,50 +295,16 @@ export default function App() {
           </div>
           <div style={{marginTop:8}}>
             <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
-            <span style={{marginLeft:8}}>
-              <button className="btn" onClick={() => setUseLightweight(v => !v)}>{useLightweight ? 'Use TradingView' : 'Use Lightweight'}</button>
-            </span>
           </div>
         </div>
       </div>
 
       <div className="main-grid">
           <div className="main-chart card no-frame">
-            {/* TradingView container (fills available area) */}
-            <div id="tradingview_chart" style={{width:'100%', height:'100%', display: !useLightweight && tvLoaded && !tvError ? 'block' : 'none'}} />
-
-            {/* Lightweight Charts rendering when enabled or as fallback */}
-            {useLightweight && (
-              <div style={{width:'100%', height: Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
-                <LightweightChart data={candles} />
-              </div>
-            )}
-
-            {/* Loading indicator when TradingView is requested */}
-            {!useLightweight && tvLoading && (
-              <div style={{display:'flex', alignItems:'center', gap:8, color:'#fbbf24', marginBottom:8}}>
-                <span>Loading TradingView...</span>
-              </div>
-            )}
-
-            {/* Diagnostics when TradingView errors and Lightweight is not selected */}
-            {!useLightweight && tvError && (
-              <div style={{marginTop:8}}>
-                <div style={{marginBottom:8}}>
-                  <strong>Chart:</strong>
-                  <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
-                  <span style={{display:'inline-block', marginLeft:12}}>
-                    <button className="btn" onClick={() => attemptLoadTradingView()} disabled={tvLoading}>
-                      {tvLoading ? 'Loading...' : 'Try TradingView'}
-                    </button>
-                  </span>
-                </div>
-                <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
-                  If the chart is blank, open DevTools → Console/Network to check for errors or blocked
-                  external scripts (TradingView). You can switch to the Lightweight chart using the button above.
-                </div>
-              </div>
-            )}
+            {/* Lightweight Charts rendering (single unified renderer) */}
+            <div style={{width:'100%', height: Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
+              <LightweightChart data={candles} />
+            </div>
           </div>
 
         <aside className="sidebar">
