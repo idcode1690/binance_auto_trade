@@ -200,9 +200,9 @@ useEffect(() => {
   if (typeof window === 'undefined') return
   const id = 'tradingview_chart'
   // avoid re-creating if widget already exists
-  if ((window as any).TradingView) {
+  if (window.TradingView) {
     try {
-      new (window as any).TradingView.widget({
+      new window.TradingView.widget({
         container_id: id,
         width: '100%',
         height: 360,
@@ -225,7 +225,7 @@ useEffect(() => {
   script.type = 'text/javascript'
   script.onload = () => {
     try {
-      new (window as any).TradingView.widget({
+      new window.TradingView.widget({
         container_id: id,
         width: '100%',
         height: 360,
