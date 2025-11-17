@@ -437,19 +437,6 @@ export default function App() {
 
 function CandlestickChart({ data = [], height = 360 }) {
   const ref = useRef(null)
-  const [width, setWidth] = useState(800)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    setWidth(el.clientWidth)
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  const pad = 10
-  const w = Math.max(300, width)
   const h = height
 
   if (!data || data.length === 0) {
@@ -463,60 +450,52 @@ function CandlestickChart({ data = [], height = 360 }) {
   const max = Math.max(...prices)
   const range = max - min || 1
 
-  const barWidth = Math.max(2, Math.floor((w - pad * 2) / data.length * 0.8))
-  const gap = Math.max(1, Math.floor((w - pad * 2) / data.length) - barWidth)
+  // Use a fixed logical grid so rendering is deterministic across page sizes/refreshes.
+  // Each candle occupies `unit` logical units; use fixed `barUnit` and `gapUnit`.
+  const pad = 10
+  const barUnit = 3
+  const gapUnit = 1
+  const unit = barUnit + gapUnit
+  const logicalWidth = pad * 2 + data.length * unit
 
   const yFor = v => {
     const p = (v - min) / range
     return h - pad - p * (h - pad * 2)
   }
 
-  // EMA polylines
-  const ema26Points = []
-  const ema200Points = []
+  // Build shapes using logical coordinates and let the SVG scale to container via viewBox.
+  const points26 = []
+  const points200 = []
 
   return (
     <div ref={ref} style={{width:'100%'}}>
-          <svg width={w} height={h}>
-        <rect x={0} y={0} width={w} height={h} fill="#071126" />
+      <svg width="100%" height={h} viewBox={`0 0 ${logicalWidth} ${h}`} preserveAspectRatio="none">
+        <rect x={0} y={0} width={logicalWidth} height={h} fill="#071126" />
         {data.map((d, i) => {
-          const x = pad + i * (barWidth + gap)
+          const x = pad + i * unit
           const openY = yFor(d.open)
           const closeY = yFor(d.close)
           const highY = yFor(d.high)
           const lowY = yFor(d.low)
           const bodyTop = Math.min(openY, closeY)
-          const bodyHeight = Math.max(1, Math.abs(closeY - openY))
+          const bodyHeight = Math.max(0.5, Math.abs(closeY - openY))
           const up = d.close >= d.open
           const color = up ? '#16a34a' : '#dc2626'
-          // wick
+          // wick x center
+          const centerX = x + barUnit / 2
+          // collect EMA polyline points
+          if (d.ema26 != null) points26.push([centerX, yFor(d.ema26)])
+          if (d.ema200 != null) points200.push([centerX, yFor(d.ema200)])
           return (
             <g key={d.time}>
-              <line x1={x + Math.floor(barWidth/2)} x2={x + Math.floor(barWidth/2)} y1={highY} y2={lowY} stroke={color} strokeWidth={1} />
-              <rect x={x} y={bodyTop} width={barWidth} height={bodyHeight} fill={color} />
+              <line x1={centerX} x2={centerX} y1={highY} y2={lowY} stroke={color} strokeWidth={0.5} />
+              <rect x={x} y={bodyTop} width={barUnit} height={bodyHeight} fill={color} />
             </g>
           )
         })}
 
-        {/* EMA lines (closed EMAs only) */}
-        {(() => {
-          const points26 = []
-          const points200 = []
-          data.forEach((d, i) => {
-            const x = pad + i * (barWidth + gap) + Math.floor(barWidth/2)
-            if (d.ema26 != null) points26.push([x, yFor(d.ema26)])
-            if (d.ema200 != null) points200.push([x, yFor(d.ema200)])
-          })
-          const path26 = points26.map(p => p.join(',')).join(' ')
-          const path200 = points200.map(p => p.join(',')).join(' ')
-          return (
-            <g>
-              {points26.length > 0 && <polyline points={path26} fill="none" stroke="#60a5fa" strokeWidth={3} strokeLinecap="round" />}
-              {points200.length > 0 && <polyline points={path200} fill="none" stroke="#f97316" strokeWidth={3} strokeLinecap="round" />}
-            </g>
-          )
-        })()}
-
+        {points26.length > 0 && <polyline points={points26.map(p => p.join(',')).join(' ')} fill="none" stroke="#60a5fa" strokeWidth={0.9} strokeLinecap="round" />}
+        {points200.length > 0 && <polyline points={points200.map(p => p.join(',')).join(' ')} fill="none" stroke="#f97316" strokeWidth={0.9} strokeLinecap="round" />}
       </svg>
     </div>
   )
