@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 
 function computeEMA(values, period) {
   const k = 2 / (period + 1)
@@ -180,8 +180,12 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const height = 160
   const padding = 2
   const points = klines.length
+  // viewCount: number of candles visible (user-controlled via mouse wheel)
+  const [viewCount, setViewCount] = useState(120)
+  const minView = 10
+  const maxView = Math.max(minView, limit)
 
-  const viewN = Math.min(points, 120)
+  const viewN = Math.min(points, viewCount)
   const slice = klines.slice(-viewN)
   const eShorts = emaShortArr.slice(-viewN)
   const eLongs = emaLongArr.slice(-viewN)
@@ -264,11 +268,32 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
 
   if (points === 0) return <div className="meta">Loading chart...</div>
+  // Wheel handler: zoom in/out by changing visible candle count.
+  const handleWheel = useCallback((e) => {
+    // Only act when over the chart; prevent page scroll when zooming here
+    try { e.preventDefault() } catch (er) {}
+    const delta = e.deltaY
+    // step scales with current viewCount so zoom speed feels natural
+    const step = Math.max(1, Math.round(viewCount * 0.12))
+    let next = viewCount
+    if (delta < 0) {
+      // wheel up -> zoom in (fewer candles)
+      next = Math.max(minView, viewCount - step)
+    } else if (delta > 0) {
+      // wheel down -> zoom out (more candles)
+      // cannot exceed available points or configured max
+      const upper = Math.min(Math.max(minView, points || 0), maxView)
+      next = Math.min(upper, viewCount + step)
+    }
+    if (next !== viewCount) setViewCount(next)
+  }, [viewCount, minView, maxView, points])
 
-  
+
+  const canZoomIn = viewN > minView
+  const canZoomOut = viewN < Math.min(points, maxView)
 
   return (
-    <div style={{width: '100%', overflow: 'hidden'}}>
+    <div onWheel={handleWheel} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{width: '100%', height: height}}>
         {slice.map((c, i) => {
           // skip invalid candle data
