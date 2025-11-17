@@ -243,7 +243,8 @@ export default function App() {
     try {
       // create a lightweight widget; options are intentionally conservative
       // Disable drawing tools and add EMA(26) & EMA(200) studies where possible.
-      new window.TradingView.widget({
+      // create widget and keep a reference so we can programmatically add studies
+      const tvWidget = new window.TradingView.widget({
         container_id: 'tradingview_chart',
         autosize: true,
         symbol: 'BINANCE:BTCUSDT',
@@ -252,26 +253,41 @@ export default function App() {
         theme: 'dark',
         style: '1',
         toolbar_bg: '#0b2033',
-        // try to remove drawing toolbar controls
-        disabled_features: ['drawing_toolbar'],
-        // hide left toolbar (if present) to reduce UI chrome
-        // the user still can enable tools via the widget menu if needed
-        hide_side_toolbar: false,
-        allow_symbol_change: false,
-        // Request EMA studies. TradingView may map study ids differently; if these
-        // don't appear, we fall back to the internal SVG EMA lines already drawn.
-        studies: [
-          'Moving Average Exponential@tv-basicstudies',
-          'Moving Average Exponential@tv-basicstudies'
+        // hide side toolbar and disable common UI features so the tool palette is removed
+        hide_side_toolbar: true,
+        disabled_features: [
+          'header_widget',
+          'header_compare',
+          'header_symbol_search',
+          'header_indicators',
+          'timeframes_toolbar',
+          'left_toolbar',
+          'context_menus',
+          'control_bar',
+          'drawing_toolbar',
+          'show_hide_button_in_legend',
         ],
-        // Attempt to set lengths for the two EMAs. The exact override keys
-        // depend on TradingView internals; these are best-effort and harmless
-        // if ignored by the widget.
-        studies_overrides: {
-          'Moving Average Exponential@tv-basicstudies.length': 26,
-          'Moving Average Exponential@tv-basicstudies.length_1': 200,
-        }
+        allow_symbol_change: false,
+        // keep studies empty here; we add EMAs programmatically once chart ready
       })
+
+      // when the chart is ready, programmatically add two EMA studies (26 and 200)
+      try {
+        tvWidget.onChartReady(() => {
+          try {
+            // createStudy(name, is_price_study, indent, inputsArray, options, callback)
+            // Add EMA(26)
+            if (tvWidget && tvWidget.chart) {
+              try { tvWidget.chart().createStudy('Moving Average Exponential', false, false, [26], null, () => {}) } catch (e) { console.warn('EMA26 createStudy failed', e) }
+              try { tvWidget.chart().createStudy('Moving Average Exponential', false, false, [200], null, () => {}) } catch (e) { console.warn('EMA200 createStudy failed', e) }
+            }
+          } catch (err) {
+            console.warn('failed to add EMA studies', err)
+          }
+        })
+      } catch (err) {
+        console.warn('tvWidget.onChartReady not available', err)
+      }
       setTvLoaded(true)
       setTvError(null)
     } catch (err) {
@@ -348,6 +364,13 @@ export default function App() {
         <div>
           <div className="title">Binance BTC/USDT — 5m Candles + EMA26/200</div>
           <div className="top-meta">Real-time trade price from Binance (aggregated to 5m candles)</div>
+          <div style={{marginTop:6}}>
+            <span className="meta" style={{marginRight:12}}>EMA26: {ema26 == null ? '—' : formatNumber(ema26)}</span>
+            <span className="meta" style={{marginRight:12}}>EMA200: {ema200 == null ? '—' : formatNumber(ema200)}</span>
+            <span style={{fontWeight:700, marginLeft:6}} className={ema26 != null && ema200 != null ? (ema26 > ema200 ? 'bull' : (ema26 < ema200 ? 'bear' : 'meta')) : 'meta'}>
+              {ema26 == null || ema200 == null ? 'EMA: —' : (ema26 > ema200 ? 'Bull Cross ▲' : (ema26 < ema200 ? 'Bear Cross ▼' : 'Neutral'))}
+            </span>
+          </div>
         </div>
         <div style={{textAlign:'right'}}>
           <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
@@ -463,7 +486,7 @@ function CandlestickChart({ data = [], height = 360 }) {
 
   return (
     <div ref={ref} style={{width:'100%'}}>
-      <svg width={w} height={h}>
+          <svg width={w} height={h}>
         <rect x={0} y={0} width={w} height={h} fill="#071126" />
         {data.map((d, i) => {
           const x = pad + i * (barWidth + gap)
@@ -497,8 +520,8 @@ function CandlestickChart({ data = [], height = 360 }) {
           const path200 = points200.map(p => p.join(',')).join(' ')
           return (
             <g>
-              {points26.length > 0 && <polyline points={path26} fill="none" stroke="#60a5fa" strokeWidth={2} />}
-              {points200.length > 0 && <polyline points={path200} fill="none" stroke="#f97316" strokeWidth={2} />}
+              {points26.length > 0 && <polyline points={path26} fill="none" stroke="#60a5fa" strokeWidth={3} strokeLinecap="round" />}
+              {points200.length > 0 && <polyline points={path200} fill="none" stroke="#f97316" strokeWidth={3} strokeLinecap="round" />}
             </g>
           )
         })()}
