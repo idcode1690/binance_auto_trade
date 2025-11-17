@@ -275,6 +275,36 @@ export default function App() {
             setDisplayPrice(last.close)
             setLastPrice(last.close)
           }
+
+          // Create an in-progress (live) candle from the most recent closed candle
+          // so the chart immediately shows the current bar (rather than waiting
+          // for the first incoming websocket tick after load).
+          try {
+            const now = Date.now()
+            const currentBucket = floorTo5MinSec(now)
+            if (last && last.time < currentBucket) {
+              const temp = { time: currentBucket, open: last.close, high: last.close, low: last.close, close: last.close }
+              // initialize live EMA refs based on closed EMAs so live lines start coherent
+              const prevLive26 = ema26Ref.current
+              const prevLive200 = ema200Ref.current
+              const liveNext26 = prevLive26 == null ? temp.close : alphaLive26 * temp.close + (1 - alphaLive26) * prevLive26
+              const liveNext200 = prevLive200 == null ? temp.close : alphaLive200 * temp.close + (1 - alphaLive200) * prevLive200
+              liveEma26Ref.current = liveNext26
+              liveEma200Ref.current = liveNext200
+              setLiveEma26(liveNext26)
+              setLiveEma200(liveNext200)
+
+              // push temp candle onto the existing parsed history so chart renders it
+              setCandles(cs => {
+                const out = cs.slice()
+                if (out.length === 0 || out[out.length - 1].time !== temp.time) out.push(temp)
+                else out[out.length - 1] = temp
+                return out
+              })
+              // set ref so subsequent websocket logic will update/close it properly
+              currentCandleRef.current = temp
+            }
+          } catch (e) { /* ignore */ }
         } catch (e) {}
       } catch (err) {
         console.warn('failed to fetch klines', err)
@@ -314,9 +344,9 @@ export default function App() {
 
       <div className="main-grid">
           <div className="main-chart card no-frame">
-            {/* Render internal SVG candlestick chart by default to avoid TradingView auto-load */}
-            <div style={{width:'100%', height: Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
-              <CandlestickChart data={candles} />
+            {/* Use lightweight-charts by default to better match TradingView visuals */}
+            <div style={{width:'100%', height: Math.max(320, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
+              <LightweightChart data={candles} height={Math.max(320, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))} />
             </div>
           </div>
 
@@ -411,7 +441,7 @@ function CandlestickChart({ data = [], height = 360 }) {
   )
 }
 
-function LightweightChart({ data = [] }) {
+function LightweightChart({ data = [], height = 360 }) {
   const ref = useRef(null)
   const [useFallback, setUseFallback] = useState(false)
   const chartRef = useRef(null)
@@ -423,15 +453,19 @@ function LightweightChart({ data = [] }) {
     const el = ref.current
     if (!el) return
     // create chart safely; if the library returns an unexpected value, fall back
+    let initTimer = null
     try {
-      const chart = createChart(el, {
-        width: el.clientWidth,
-        height: el.clientHeight,
-        layout: { background: { color: '#041327' }, textColor: '#dbe9f5' },
-        grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
-        rightPriceScale: { borderColor: 'rgba(255,255,255,0.03)' },
-        timeScale: { borderColor: 'rgba(255,255,255,0.03)' }
-      })
+      initTimer = setTimeout(() => {
+        try {
+          const chart = createChart(el, {
+            width: Math.max(420, el.clientWidth || 0),
+            height: height,
+            layout: { background: { color: '#071127' }, textColor: '#dbe9f5', fontSize: 12 },
+            grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+            rightPriceScale: { visible: true, borderColor: 'rgba(255,255,255,0.03)', scaleMargins: { top: 0.08, bottom: 0.08 } },
+            timeScale: { borderColor: 'rgba(255,255,255,0.03)', timeVisible: true, secondsVisible: false, rightOffset: 6 },
+            crosshair: { mode: 1, vertLine: { color: 'rgba(255,255,255,0.06)', width: 1 }, horzLine: { color: 'rgba(255,255,255,0.06)', width: 1 } },
+          })
 
       // defensive: ensure returned object is a lightweight-charts chart
       if (!chart || typeof chart.addCandlestickSeries !== 'function') {
@@ -442,35 +476,50 @@ function LightweightChart({ data = [] }) {
 
       chartRef.current = chart
 
-      const candleSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a', downColor: '#ff4d4f', wickUpColor: '#26a69a', wickDownColor: '#ff4d4f', borderVisible: true
-      })
+          const candleSeries = chart.addCandlestickSeries({
+            upColor: '#26a69a', downColor: '#ff4d4f', wickUpColor: '#26a69a', wickDownColor: '#ff4d4f', borderVisible: true, wickVisible: true
+          })
       candleSeriesRef.current = candleSeries
 
-      const e26 = chart.addLineSeries({ color: '#f3b000', lineWidth: 1.5 })
-      const e200 = chart.addLineSeries({ color: '#ff7a00', lineWidth: 1.5 })
+      const e26 = chart.addLineSeries({ color: '#f3b000', lineWidth: 2 })
+      const e200 = chart.addLineSeries({ color: '#ff7a00', lineWidth: 2 })
       ema26RefSeries.current = e26
       ema200RefSeries.current = e200
 
       // resize observer
-      const ro = new ResizeObserver(() => {
-        if (!el) return
-        chart.applyOptions({ width: el.clientWidth, height: el.clientHeight })
-      })
+          const ro = new ResizeObserver(() => {
+            if (!el) return
+            chart.applyOptions({ width: el.clientWidth, height: height })
+            try { chart.timeScale().fitContent() } catch (e) {}
+          })
       ro.observe(el)
 
-      return () => {
-        try { ro.disconnect() } catch (e) {}
-        try { chart.remove() } catch (e) {}
-        chartRef.current = null
-        candleSeriesRef.current = null
-        ema26RefSeries.current = null
-        ema200RefSeries.current = null
-      }
+          chartRef.current = chart
+
+          returnCleanup = () => {
+            try { ro.disconnect() } catch (e) {}
+            try { chart.remove() } catch (e) {}
+            chartRef.current = null
+            candleSeriesRef.current = null
+            ema26RefSeries.current = null
+            ema200RefSeries.current = null
+          }
+        } catch (errInner) {
+          console.warn('failed to initialize lightweight-charts (inner), will fallback', errInner)
+          setUseFallback(true)
+        }
+      }, 60)
     } catch (err) {
       console.warn('failed to initialize lightweight-charts, using SVG fallback', err)
       setUseFallback(true)
       return
+    }
+    // cleanup handler variable (reassigned inside init)
+    let returnCleanup = null
+
+    return () => {
+      if (initTimer) try { clearTimeout(initTimer) } catch (e) {}
+      if (returnCleanup) try { returnCleanup() } catch (e) {}
     }
   }, [])
 
@@ -489,13 +538,8 @@ function LightweightChart({ data = [] }) {
 
     if (mapped.length === 0) return
     try {
-      // if many points, setData once; otherwise update incremental
-      if (mapped.length > 200) {
-        series.setData(mapped)
-      } else {
-        // update: set all for simplicity to keep EMA overlays in sync
-        series.setData(mapped)
-      }
+      // always setData to keep series/overlays perfectly in sync
+      series.setData(mapped)
 
       // build EMA series points from data (prefer closed ema fields)
       const points26 = []
@@ -509,10 +553,13 @@ function LightweightChart({ data = [] }) {
       })
       if (e26) e26.setData(points26)
       if (e200) e200.setData(points200)
+
+      // keep timeScale anchored so newest candle is at right edge
+      try { chartRef.current && chartRef.current.timeScale().scrollToRealTime() } catch (e) {}
     } catch (err) {
       console.warn('lightweight update failed', err)
     }
-  }, [data])
+  }, [data, useFallback, height])
 
   return <div ref={ref} style={{width:'100%', height: '100%'}} />
 }
