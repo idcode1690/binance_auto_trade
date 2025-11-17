@@ -301,9 +301,9 @@ export default function App() {
 
       <div className="main-grid">
           <div className="main-chart card no-frame">
-            {/* Lightweight Charts rendering (single unified renderer) */}
+            {/* Render internal SVG candlestick chart by default to avoid TradingView auto-load */}
             <div style={{width:'100%', height: Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))}}>
-              <LightweightChart data={candles} />
+              <CandlestickChart data={candles} />
             </div>
           </div>
 
@@ -440,6 +440,7 @@ function CandlestickChart({ data = [], height = 360 }) {
 
 function LightweightChart({ data = [] }) {
   const ref = useRef(null)
+  const [useFallback, setUseFallback] = useState(false)
   const chartRef = useRef(null)
   const candleSeriesRef = useRef(null)
   const ema26RefSeries = useRef(null)
@@ -448,46 +449,63 @@ function LightweightChart({ data = [] }) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    // create chart
-    const chart = createChart(el, {
-      width: el.clientWidth,
-      height: el.clientHeight,
-      layout: { background: { color: '#071126' }, textColor: '#d1d5db' },
-      grid: { vertLines: { color: '#0b1220' }, horzLines: { color: '#0b1220' } },
-      rightPriceScale: { borderColor: '#0b1220' },
-      timeScale: { borderColor: '#0b1220' }
-    })
-    chartRef.current = chart
+    // create chart safely; if the library returns an unexpected value, fall back
+    try {
+      const chart = createChart(el, {
+        width: el.clientWidth,
+        height: el.clientHeight,
+        layout: { background: { color: '#071126' }, textColor: '#d1d5db' },
+        grid: { vertLines: { color: '#0b1220' }, horzLines: { color: '#0b1220' } },
+        rightPriceScale: { borderColor: '#0b1220' },
+        timeScale: { borderColor: '#0b1220' }
+      })
 
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: '#16a34a', downColor: '#dc2626', wickUpColor: '#16a34a', wickDownColor: '#dc2626'
-    })
-    candleSeriesRef.current = candleSeries
+      // defensive: ensure returned object is a lightweight-charts chart
+      if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+        console.warn('lightweight-charts createChart did not return a chart instance, using SVG fallback')
+        setUseFallback(true)
+        return
+      }
 
-    const e26 = chart.addLineSeries({ color: '#60a5fa', lineWidth: 2 })
-    const e200 = chart.addLineSeries({ color: '#f97316', lineWidth: 2 })
-    ema26RefSeries.current = e26
-    ema200RefSeries.current = e200
+      chartRef.current = chart
 
-    // resize observer
-    const ro = new ResizeObserver(() => {
-      if (!el) return
-      chart.applyOptions({ width: el.clientWidth, height: el.clientHeight })
-    })
-    ro.observe(el)
+      const candleSeries = chart.addCandlestickSeries({
+        upColor: '#16a34a', downColor: '#dc2626', wickUpColor: '#16a34a', wickDownColor: '#dc2626'
+      })
+      candleSeriesRef.current = candleSeries
 
-    return () => {
-      try { ro.disconnect() } catch (e) {}
-      try { chart.remove() } catch (e) {}
-      chartRef.current = null
-      candleSeriesRef.current = null
-      ema26RefSeries.current = null
-      ema200RefSeries.current = null
+      const e26 = chart.addLineSeries({ color: '#60a5fa', lineWidth: 2 })
+      const e200 = chart.addLineSeries({ color: '#f97316', lineWidth: 2 })
+      ema26RefSeries.current = e26
+      ema200RefSeries.current = e200
+
+      // resize observer
+      const ro = new ResizeObserver(() => {
+        if (!el) return
+        chart.applyOptions({ width: el.clientWidth, height: el.clientHeight })
+      })
+      ro.observe(el)
+
+      return () => {
+        try { ro.disconnect() } catch (e) {}
+        try { chart.remove() } catch (e) {}
+        chartRef.current = null
+        candleSeriesRef.current = null
+        ema26RefSeries.current = null
+        ema200RefSeries.current = null
+      }
+    } catch (err) {
+      console.warn('failed to initialize lightweight-charts, using SVG fallback', err)
+      setUseFallback(true)
+      return
     }
   }, [])
 
   // update series when data changes
   useEffect(() => {
+    // if we decided to use the fallback, skip chart updates
+    if (useFallback) return
+
     const series = candleSeriesRef.current
     const e26 = ema26RefSeries.current
     const e200 = ema200RefSeries.current
