@@ -22,6 +22,7 @@ function computeEMA(values, period) {
 
 export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice = null, onTrade = null, onCross = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
   const [klines, setKlines] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
   const [emaShortArr, setEmaShortArr] = useState([])
   const [emaLongArr, setEmaLongArr] = useState([])
   const emaShortRef = useRef(null)
@@ -32,6 +33,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     let ws = null
 
     async function load() {
+      setIsLoading(true)
       try {
         const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
         const res = await fetch(url)
@@ -45,8 +47,11 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
         }))
         if (cancelled) return
         setKlines(parsed)
+        setIsLoading(false)
       } catch (err) {
         console.warn('fetch klines failed', err)
+        setKlines([])
+        setIsLoading(false)
       }
     }
 
@@ -181,8 +186,13 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const eShorts = emaShortArr.slice(-viewN)
   const eLongs = emaLongArr.slice(-viewN)
 
-  const highs = slice.map(s => s.high)
-  const lows = slice.map(s => s.low)
+  // ensure numeric highs/lows exist
+  const highs = slice.map(s => Number(s.high)).filter(v => isFinite(v))
+  const lows = slice.map(s => Number(s.low)).filter(v => isFinite(v))
+  if (highs.length === 0 || lows.length === 0) {
+    if (isLoading) return <div className="meta">Loading chart...</div>
+    return <div className="meta">No data for {String(symbol)}</div>
+  }
   const max = Math.max(...highs)
   const min = Math.min(...lows)
   const xStep = (width - padding * 2) / (viewN - 1 || 1)
@@ -260,6 +270,8 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     <div style={{width: '100%', overflow: 'hidden'}}>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{width: '100%', height: height}}>
         {slice.map((c, i) => {
+          // skip invalid candle data
+          if (![c.open, c.high, c.low, c.close].every(x => isFinite(Number(x)))) return null
           const x = padding + i * xStep
           const highY = yFor(c.high)
           const lowY = yFor(c.low)
