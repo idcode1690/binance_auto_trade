@@ -35,9 +35,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     async function load() {
       setIsLoading(true)
       try {
-        // use public market data (production endpoints)
-        const restBase = 'https://api.binance.com'
-        const url = `${restBase}/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
+        const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
         const res = await fetch(url)
         const data = await res.json()
         const parsed = data.map(r => ({
@@ -61,9 +59,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     try {
       const symLower = String(symbol || 'BTCUSDT').toLowerCase()
       const streamName = `${symLower}@kline_${interval}/${symLower}@trade`
-      // websocket base (production)
-      const wsBase = 'wss://stream.binance.com:9443'
-      const wsUrl = `${wsBase}/stream?streams=${streamName}`
+      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streamName}`
       ws = new WebSocket(wsUrl)
       ws.onmessage = (ev) => {
         try {

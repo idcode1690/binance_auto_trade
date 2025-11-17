@@ -274,9 +274,9 @@ body {
 
 /* Two-column Alerts / Orders layout: equal height columns, independent scrolling */
 .two-columns { display:flex; gap:12px; align-items:stretch; }
-.two-columns .col { flex:1; display:flex; flex-direction:column; min-height:120px; }
+.two-columns .col { flex:1; display:flex; flex-direction:column; min-height:120px; max-height:360px; }
 .two-columns .col > h4 { margin-top:0 }
-.two-columns .col .meta { overflow:visible; padding-right:6px }
+.two-columns .col .meta { overflow:auto; padding-right:6px }
 .two-columns .alerts, .two-columns .orders-list { list-style:none; padding:0; margin:0 }
 
 @media (max-width:900px){
@@ -291,13 +291,4 @@ body {
 .tabs-row .tab:first-child { border-top-left-radius:8px; border-bottom-left-radius:8px; border-right: none }
 .tabs-row .tab:last-child { border-top-right-radius:8px; border-bottom-right-radius:8px }
 .tabs-row .tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
-.tab-content { max-height:none; overflow:visible; padding-right:0 }
-
-/* Positions table styling */
-.positions-section { margin-top: 12px }
-.positions-table { width: 100%; border-collapse: collapse; font-size:13px }
-.positions-table th, .positions-table td { padding:8px 10px; text-align:left; border-bottom: 1px solid rgba(255,255,255,0.03) }
-.positions-table thead th { color: var(--muted); font-weight:700; font-size:12px }
-.positions-table tbody tr:hover { background: rgba(255,255,255,0.01) }
-.positions-table td.bull { color: var(--success); font-weight:700 }
-.positions-table td.bear { color: var(--danger); font-weight:700 }
+.tab-content { max-height:360px; overflow:auto; padding-right:6px }

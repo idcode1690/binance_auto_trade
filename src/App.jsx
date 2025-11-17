@@ -61,7 +61,6 @@ export default function App() {
   const [symbolStr, setSymbolStr] = useState(() => {
     try { return localStorage.getItem('symbol') || 'BTCUSDT' } catch (e) { return 'BTCUSDT' }
   })
-  // Testnet and Demo toggles removed — always use live account data in UI
   const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
@@ -86,10 +85,6 @@ export default function App() {
   const value = isFinite(Number(lastPrice)) ? holdings * Number(lastPrice) : null
   const change = ''
   const candles = 0
-  // derived account numbers for display
-  const accountWallet = (account && Number.isFinite(Number(account.totalWalletBalance))) ? Number(account.totalWalletBalance) : null
-  const accountUnreal = (account && Number.isFinite(Number(account.totalUnrealizedProfit))) ? Number(account.totalUnrealizedProfit) : null
-  const accountEquity = (accountWallet != null && accountUnreal != null) ? (accountWallet + accountUnreal) : (accountWallet != null ? accountWallet : null)
 
   // Poll backend for Binance Futures account info (requires server running and .env set)
   useEffect(() => {
@@ -107,7 +102,7 @@ export default function App() {
           if (!mounted) return
                 if (data) {
                   setAccount(data)
-                  if (Number.isFinite(Number(data.totalWalletBalance))) {
+                  if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
                     try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
                     setFuturesBalanceStr(String(data.totalWalletBalance))
                   }
@@ -131,46 +126,6 @@ export default function App() {
     fetchAccount()
     const id = setInterval(fetchAccount, 10000)
     return () => { mounted = false; clearInterval(id) }
-  }, [symbol])
-
-  // Subscribe to server-sent account updates for near-real-time positions
-  useEffect(() => {
-    let es
-    // prefer explicit backend address so static host (4740) can still receive SSE from backend (3000)
-    try {
-      es = new EventSource('http://127.0.0.1:3000/api/futures/sse')
-    } catch (e) {
-      try {
-        es = new EventSource('/api/futures/sse')
-      } catch (ee) {
-        return
-      }
-    }
-    const onAccount = (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        if (data) {
-          setAccount(data)
-          if (Number.isFinite(Number(data.totalWalletBalance))) {
-            try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-            setFuturesBalanceStr(String(data.totalWalletBalance))
-          }
-          if (Array.isArray(data.positions) && symbol) {
-            const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-            if (p) {
-              const amt = Number(p.positionAmt) || 0
-              try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-              setHoldingsStr(String(amt))
-            }
-          }
-        }
-      } catch (err) {}
-    }
-    es.addEventListener('account', onAccount)
-    es.onerror = () => {
-      try { es.close() } catch (e) {}
-    }
-    return () => { try { es.close() } catch (e) {} }
   }, [symbol])
 
   const wsRef = useRef(null)
@@ -237,8 +192,6 @@ export default function App() {
                 minutes={minutes}
                 symbol={symbol}
               />
-              {/* Positions list shown under the chart */}
-              <PositionsList account={account} />
             </div>
           </div>
         </section>
@@ -261,11 +214,11 @@ export default function App() {
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:600}}>Futures USDT Balance</div>
-                    <div style={{fontSize:12,color:'var(--muted)'}}>{account && Number.isFinite(Number(account.totalWalletBalance)) ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{accountEquity != null ? formatPrice(accountEquity) : formatPrice(Number(futuresBalanceStr || 0))}</div>
-                    <div style={{fontSize:13}}>{accountUnreal != null ? `Unrealized P/L: ${formatPrice(accountUnreal)} USDT` : ''}</div>
+                    <div style={{fontSize:16,fontWeight:600}}>{account && typeof account.totalWalletBalance !== 'undefined' ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
+                    <div style={{fontSize:13}}>{account && typeof account.totalUnrealizedProfit !== 'undefined' ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
                   </div>
                 </div>
               </div>
@@ -362,112 +315,6 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
         symbol={String(symbol || 'BTCUSDT')}
       />
     </Suspense>
-  )
-}
-
-function PositionsList({ account }) {
-  const positions = (account && Array.isArray(account.positions)) ? account.positions.filter(p => Number(p.positionAmt) && Number(p.positionAmt) !== 0) : []
-  const fmt = (v, digits = 8) => {
-    if (v == null) return '-'
-    const n = Number(v)
-    if (!isFinite(n)) return v
-    return n.toLocaleString(undefined, { maximumFractionDigits: digits })
-  }
-  return (
-    <div className="positions-section" style={{marginTop:12}}>
-      <h4 style={{marginTop:0}}>Positions</h4>
-      <div className="meta">
-        {positions.length === 0 ? (
-          <div>No open positions.</div>
-        ) : (
-          <table className="positions-table">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Size</th>
-                <th>Entry</th>
-                <th>PNL (ROI %)</th>
-                <th>Leverage</th>
-                <th>Margin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map(p => (
-                <tr key={p.symbol}>
-                  <td>{p.symbol}</td>
-                  <td className={Number(p.positionAmt) > 0 ? 'bull' : 'bear'}>{fmt(p.positionAmt)}</td>
-                  <td>{fmt(p.entryPrice)}</td>
-                  {
-                    // compute percentage: unrealizedProfit / (abs(positionAmt) * entryPrice)
-                  }
-                  <td className={Number(p.unrealizedProfit) >= 0 ? 'bull' : 'bear'}>
-                    {(() => {
-                      const amt = Math.abs(Number(p.positionAmt) || 0)
-                      const entry = Number(p.entryPrice) || 0
-                      const up = Number(p.unrealizedProfit) || 0
-                      // Prefer explicit initial margin from Binance when present.
-                      // Otherwise compute a fallback initial margin using notional / leverage if leverage is available.
-                      let initMargin = Number(p.positionInitialMargin || 0) || 0
-                      if (!initMargin && amt > 0 && entry > 0) {
-                        const notional = amt * entry
-                        // try common leverage fields (strings from API), fallback to 0
-                        const lev = Number(p.leverage || p.initialLeverage || p.leverageRate || 0) || 0
-                        if (lev > 0) {
-                          initMargin = notional / lev
-                        }
-                      }
-                      let pct = null
-                      if (initMargin > 0) {
-                        pct = (up / initMargin) * 100
-                      } else if (amt > 0 && entry > 0) {
-                        // last resort: ROI vs notional (less preferred)
-                        const notional = amt * entry
-                        pct = notional > 0 ? (up / notional) * 100 : 0
-                      }
-                      const amountSign = up > 0 ? '+' : (up < 0 ? '-' : '')
-                      return (
-                        <div>
-                          <div style={{fontWeight:700}}>{amountSign}{fmt(Math.abs(up), 2)} USDT</div>
-                          {pct !== null ? (() => {
-                            const pctNum = Number(pct) || 0
-                            const pctSign = pctNum > 0 ? '+' : (pctNum < 0 ? '-' : '')
-                            return <div style={{fontSize:11,color:'var(--muted)'}}>({pctSign}{fmt(Math.abs(pctNum),2)}%)</div>
-                          })() : null}
-                        </div>
-                      )
-                    })()}
-                  </td>
-                  <td>{p.leverage || '-'}</td>
-                  <td>
-                    {(() => {
-                      const initial = Number(p.positionInitialMargin || 0) || 0
-                      const toLabel = (raw) => {
-                        if (!raw) return '-'
-                        const s = String(raw).toLowerCase()
-                        if (s.indexOf('isol') !== -1) return 'Isolated'
-                        if (s.indexOf('cross') !== -1 || s.indexOf('cros') !== -1) return 'Cross'
-                        return String(raw)
-                      }
-                      const label = p.marginType ? toLabel(p.marginType) : (typeof p.isIsolated === 'boolean' ? (p.isIsolated ? 'Isolated' : 'Cross') : (typeof p.isolated === 'boolean' ? (p.isolated ? 'Isolated' : 'Cross') : '-'))
-                      if (initial > 0) {
-                        return (
-                          <div>
-                            <div style={{fontWeight:700}}>{fmt(initial, 2)} USDT</div>
-                            <div style={{fontSize:11,color:'var(--muted)'}}>{label !== '-' ? `(${label})` : '-'}</div>
-                          </div>
-                        )
-                      }
-                      // fallback: show label in parentheses or dash
-                      return label !== '-' ? `(${label})` : '-'
-                    })()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
   )
 }
 
