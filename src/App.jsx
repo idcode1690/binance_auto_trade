@@ -327,75 +327,82 @@ export default function App() {
 
   return (
     <div className="container body-root">
-      <h2>Binance BTC/USDT — 5m Candles + EMA26/200</h2>
-
-      <div className="card">
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div>
-            <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
-            <div className="meta">Real-time trade price from Binance (aggregated to 5m candles)</div>
+      <div className="header">
+        <div>
+          <div className="title">Binance BTC/USDT — 5m Candles + EMA26/200</div>
+          <div className="top-meta">Real-time trade price from Binance (aggregated to 5m candles)</div>
+        </div>
+        <div style={{textAlign:'right'}}>
+          <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
+          <div style={{marginTop:8}}>
+            <span>Status: <span className="status" style={{background: connected ? 'var(--success)' : '#3b1b1b'}}>{connected ? 'Connected' : 'Disconnected'}</span></span>
           </div>
-          <div style={{textAlign:'right'}}>
-            <div>Status: <span className="status" style={{background: connected ? '#063f19' : '#3b1b1b'}}>{connected ? 'Connected' : 'Disconnected'}</span></div>
-            <div style={{marginTop:8}}>
-              <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
-            </div>
+          <div style={{marginTop:8}}>
+            <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
           </div>
         </div>
       </div>
 
-      <div className="card no-frame">
-        {/* Always render the TradingView container so the tv.js script can find it when it runs. */}
-        <div id="tradingview_chart" style={{width:'100%', height:'100%', display: tvLoaded && !tvError ? 'block' : 'none'}} />
+      <div className="main-grid">
+        <div className="main-chart card no-frame">
+          {/* TradingView container (fills available area) */}
+          <div id="tradingview_chart" style={{width:'100%', height:'100%', display: tvLoaded && !tvError ? 'block' : 'none'}} />
 
-        {/* Show fallback chart and diagnostics when TradingView isn't initialized */}
-        {(!tvLoaded || tvError) && (
-          <div>
-            <div style={{marginBottom:8}}>
-              <strong>Chart:</strong>
-              {tvLoaded ? (
-                <span style={{marginLeft:8, color:'#9ca3af'}}>TradingView initialized</span>
-              ) : tvError ? (
-                <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
-              ) : tvLoading ? (
-                <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
-              ) : (
-                <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
-              )}
+          {/* Fallback and diagnostics when TradingView isn't initialized */}
+          {(!tvLoaded || tvError) && (
+            <div style={{display:'flex', flexDirection:'column', height:'100%'}}>
+              <div style={{marginBottom:8}}>
+                <strong>Chart:</strong>
+                {tvLoaded ? (
+                  <span style={{marginLeft:8, color:'#9ca3af'}}>TradingView initialized</span>
+                ) : tvError ? (
+                  <span style={{marginLeft:8, color:'#f87171'}}>TradingView failed: {tvError}</span>
+                ) : tvLoading ? (
+                  <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
+                ) : (
+                  <span style={{marginLeft:8, color:'#fbbf24'}}>Loading TradingView...</span>
+                )}
 
-              {/* Allow user to attempt to load TradingView if automatic load failed */}
-              {!tvLoaded && (
-                <div style={{display:'inline-block', marginLeft:12}}>
-                  <button className="btn" onClick={() => attemptLoadTradingView()} disabled={tvLoading}>
-                    {tvLoading ? 'Loading...' : (tvError ? 'Try TradingView' : 'Load TradingView')}
-                  </button>
+                {!tvLoaded && (
+                  <span style={{display:'inline-block', marginLeft:12}}>
+                    <button className="btn" onClick={() => attemptLoadTradingView()} disabled={tvLoading}>
+                      {tvLoading ? 'Loading...' : (tvError ? 'Try TradingView' : 'Load TradingView')}
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              <div style={{flex:1, minHeight:200}}>
+                <CandlestickChart data={candles} height={Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 260 : 360))} />
+              </div>
+
+              <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
+                If the chart is blank, open DevTools → Console/Network to check for errors or blocked external scripts (TradingView). This page will show a fallback candlestick chart.
+              </div>
+            </div>
+          )}
+        </div>
+
+        <aside className="sidebar">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center', marginBottom:8}}>
+            <div><strong>Cross Alerts (5m)</strong></div>
+            <div className="meta">Latest first (keeps 50)</div>
+          </div>
+          <ul className="alerts">
+            {alerts.length === 0 && <li className="alert-item meta">No crosses detected yet.</li>}
+            {alerts.map((a, i) => (
+              <li key={i} className="alert-item">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <span className={a.type === 'bull' ? 'bull' : 'bear'}>{a.type === 'bull' ? 'Bull Cross ▲' : 'Bear Cross ▼'}</span>
+                    &nbsp; @ {a.price ? formatNumber(a.price) : '—'}
+                    <div className="meta">{new Date(a.time).toLocaleString()}</div>
+                  </div>
                 </div>
-              )}
-            </div>
-            <CandlestickChart data={candles} height={Math.max(300, (typeof window !== 'undefined' ? window.innerHeight - 220 : 360))} />
-            <div style={{marginTop:8, fontSize:12, color:'#9ca3af'}}>
-              If the chart is blank, open DevTools → Console/Network to check for errors or blocked
-              external scripts (TradingView). This page will show a fallback candlestick chart.
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div><strong>Cross Alerts (5m)</strong></div>
-          <div className="meta">Latest first (keeps 50)</div>
-        </div>
-        <ul className="alerts">
-          {alerts.length === 0 && <li className="alert-item meta">No crosses detected yet.</li>}
-          {alerts.map((a, i) => (
-            <li key={i} className="alert-item">
-              <span className={a.type === 'bull' ? 'bull' : 'bear'}>{a.type === 'bull' ? 'Bull Cross ▲' : 'Bear Cross ▼'}</span>
-              &nbsp; @ {a.price ? formatNumber(a.price) : '—'}
-              <div className="meta">{new Date(a.time).toLocaleString()}</div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </aside>
       </div>
     </div>
   )
