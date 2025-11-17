@@ -286,29 +286,6 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
 
   if (points === 0) return <div className="meta">Loading chart...</div>
-  // Wheel handler: zoom in/out by changing visible candle count.
-  const handleWheel = useCallback((e) => {
-    // Only act when over the chart; prevent page scroll when zooming here
-    try { e.preventDefault() } catch (er) {}
-    const delta = e.deltaY
-    // step scales with current viewCount so zoom speed feels natural
-    const step = Math.max(1, Math.round(viewCount * 0.12))
-    let next = viewCount
-    if (delta < 0) {
-      // wheel up -> zoom in (fewer candles)
-      next = Math.max(minView, viewCount - step)
-    } else if (delta > 0) {
-      // wheel down -> zoom out (more candles)
-      // cannot exceed available points or configured max
-      const upper = Math.min(Math.max(minView, points || 0), maxView)
-      next = Math.min(upper, viewCount + step)
-    }
-    if (next !== viewCount) setViewCount(next)
-  }, [viewCount, minView, maxView, points])
-
-
-  const canZoomIn = viewN > minView
-  const canZoomOut = viewN < Math.min(points, maxView)
 
   return (
     <div onWheel={handleWheel} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
