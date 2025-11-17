@@ -61,12 +61,7 @@ export default function App() {
   const [symbolStr, setSymbolStr] = useState(() => {
     try { return localStorage.getItem('symbol') || 'BTCUSDT' } catch (e) { return 'BTCUSDT' }
   })
-  const [useTestnet, setUseTestnet] = useState(() => {
-    try { return localStorage.getItem('useTestnet') === 'true' } catch (e) { return false }
-  })
-  const [useDemoData, setUseDemoData] = useState(() => {
-    try { return localStorage.getItem('useDemoData') === 'true' } catch (e) { return false }
-  })
+  // Testnet and Demo toggles removed — always use live account data in UI
   const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
@@ -158,10 +153,6 @@ export default function App() {
                 enable it step-by-step and capture any initialization errors. */}
             <div style={{marginTop: 8}}>
               <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
-                <label style={{fontSize:13,color:'var(--muted)'}}>Testnet:</label>
-                <input type="checkbox" checked={useTestnet} onChange={e => { const v = e.target.checked; setUseTestnet(v); try{ localStorage.setItem('useTestnet', v ? 'true' : 'false') }catch{} }} />
-                <label style={{fontSize:13,color:'var(--muted)', marginLeft:12}}>Demo:</label>
-                <input type="checkbox" checked={useDemoData} onChange={e => { const v = e.target.checked; setUseDemoData(v); try{ localStorage.setItem('useDemoData', v ? 'true' : 'false') }catch{} }} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>Symbol:</label>
                 <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => { const s = (symbolStr||'BTCUSDT').trim().toUpperCase(); setSymbolStr(s); try{ localStorage.setItem('symbol', s) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
@@ -201,14 +192,9 @@ export default function App() {
                 emaLong={emaLong}
                 minutes={minutes}
                 symbol={symbol}
-                useTestnet={useTestnet}
               />
-              {/* Positions list shown under the chart (use demo when enabled) */}
-              <PositionsList account={useDemoData ? {
-                totalWalletBalance: '123.45',
-                totalUnrealizedProfit: '12.34',
-                positions: [ { symbol: 'BTCUSDT', positionAmt: '0.002', entryPrice: '93300', unrealizedProfit: '1.23', leverage: '10', marginType: 'ISOLATED' } ]
-              } : account} />
+              {/* Positions list shown under the chart */}
+              <PositionsList account={account} />
             </div>
           </div>
         </section>
@@ -234,8 +220,8 @@ export default function App() {
                     <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{useDemoData ? formatPrice(123.45) : (account && typeof account.totalWalletBalance !== 'undefined' ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0)))}</div>
-                    <div style={{fontSize:13}}>{useDemoData ? `Unrealized P/L: ${formatPrice(12.34)} USDT` : (account && typeof account.totalUnrealizedProfit !== 'undefined' ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : '')}</div>
+                    <div style={{fontSize:16,fontWeight:600}}>{account && typeof account.totalWalletBalance !== 'undefined' ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
+                    <div style={{fontSize:13}}>{account && typeof account.totalUnrealizedProfit !== 'undefined' ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
                   </div>
                 </div>
               </div>
@@ -303,7 +289,7 @@ export default function App() {
   )
 }
 
-function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT', useTestnet = false }) {
+function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
   const toBinanceInterval = (m) => {
     const n = Math.max(1, Number(m || 1))
     const map = {
@@ -330,7 +316,6 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
         emaShort={Number(emaShort)||26}
         emaLong={Number(emaLong)||200}
         symbol={String(symbol || 'BTCUSDT')}
-        useTestnet={useTestnet}
       />
     </Suspense>
   )
