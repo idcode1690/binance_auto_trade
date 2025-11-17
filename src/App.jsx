@@ -206,8 +206,7 @@ export default function App() {
                           <div style={{flex:1,textAlign:'right'}}>Lev</div>
                           <div style={{flex:1,textAlign:'right'}}>Size</div>
                           <div style={{flex:1,textAlign:'right'}}>Entry Price</div>
-                          <div style={{flex:1,textAlign:'right'}}>Margin Ratio</div>
-                          <div style={{flex:1,textAlign:'right'}}>Margin</div>
+                          <div style={{flex:1.2,textAlign:'right'}}>Margin</div>
                           <div style={{flex:1,textAlign:'right'}}>PNL (ROI %)</div>
                           <div style={{flex:1,textAlign:'right'}}>Margin Type</div>
                         </div>
@@ -233,8 +232,14 @@ export default function App() {
                               <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
                               <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
                               <div style={{flex:1,textAlign:'right'}}>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{initMargin && notional ? `${((initMargin / notional)*100).toFixed(2)}%` : '—'}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{initMargin ? `${initMargin.toFixed(2)} USDT` : '—'}</div>
+                              <div style={{flex:1.2,textAlign:'right'}}>
+                                {initMargin ? (
+                                  <div>
+                                    <div style={{fontWeight:700}}>{initMargin.toFixed(4)} USDT</div>
+                                    <div style={{fontSize:12,color:'var(--muted)'}}>{notional ? `(${((initMargin / notional)*100).toFixed(2)}%)` : '(—)'}</div>
+                                  </div>
+                                ) : '—'}
+                              </div>
                               <div style={{flex:1,textAlign:'right'}}><span style={{color:pnlColor,fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</span><div style={{fontSize:12,color:'var(--muted)'}}>{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div></div>
                               <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
                             </div>
