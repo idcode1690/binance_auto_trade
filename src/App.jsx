@@ -37,11 +37,7 @@ export default function App() {
   const [autoOrderEnabled, setAutoOrderEnabled] = useState(() => {
     try { return localStorage.getItem('autoOrderEnabled') === 'true' } catch (e) { return false }
   })
-  const [testOrderSizeStr, setTestOrderSizeStr] = useState(() => {
-    try { return localStorage.getItem('testOrderSize') || '10' } catch (e) { return '10' }
-  })
-  const [testFeedback, setTestFeedback] = useState(null)
-  const [sendLive, setSendLive] = useState(() => { try { return localStorage.getItem('sendLive') === 'true' } catch (e) { return false } })
+  // Test order UI removed per request
   const [orders, setOrders] = useState(() => {
     try { const raw = localStorage.getItem('orders'); return raw ? JSON.parse(raw) : [] } catch (e) { return [] }
   })
@@ -204,139 +200,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              {/* Test Order controls */}
-              <div style={{marginTop:10,display:'flex',gap:8,alignItems:'center'}}>
-                <input className="theme-input" type="number" min={0.1} step={0.1} value={testOrderSizeStr} onChange={e=>setTestOrderSizeStr(e.target.value)} onBlur={() => { const v = String(Math.max(0.0001, Number(testOrderSizeStr) || 10)); setTestOrderSizeStr(v); try{ localStorage.setItem('testOrderSize', v) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
-                <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--muted)'}}>
-                  <input type="checkbox" checked={sendLive} onChange={e=>{ const v = !!e.target.checked; setSendLive(v); try{ localStorage.setItem('sendLive', v ? 'true' : 'false') }catch{} }} />
-                  Send Live
-                </label>
-                <button className="btn" onClick={async () => {
-                  const usdt = Number(testOrderSizeStr) || 0
-                  if (!(usdt > 0)) {
-                    const msg = 'Invalid USDT size'
-                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                    setTestFeedback({ type: 'error', msg })
-                    setTimeout(() => setTestFeedback(null), 8000)
-                    return
-                  }
-                  const priceNum = Number(lastPrice)
-                  if (!isFinite(priceNum) || priceNum <= 0) {
-                    const msg = 'No valid live price available'
-                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                    setTestFeedback({ type: 'error', msg })
-                    setTimeout(() => setTestFeedback(null), 8000)
-                    return
-                  }
-                  
-                  // Fetch exchangeInfo for symbol to determine stepSize and minNotional
-                  let decimals = 6 // fallback
-                  let minQty = 0
-                  let minNotional = 0
-                  try {
-                    const s = String(symbol || 'BTCUSDT').toUpperCase()
-                    const resp = await fetch(`https://fapi.binance.com/fapi/v1/exchangeInfo?symbol=${s}`)
-                    if (resp && resp.ok) {
-                      const j = await resp.json()
-                      const info = j && j.symbols && j.symbols[0]
-                      if (info && Array.isArray(info.filters)) {
-                        const lot = info.filters.find(f => f.filterType === 'LOT_SIZE')
-                        const minNot = info.filters.find(f => f.filterType === 'MIN_NOTIONAL' || f.filterType === 'NOTIONAL')
-                        if (lot && lot.stepSize) {
-                          // compute decimals from stepSize, e.g. 0.001 -> 3
-                          const step = String(lot.stepSize)
-                          if (step.indexOf('.') >= 0) {
-                            const dec = step.split('.')[1].replace(/0+$/,'')
-                            decimals = dec.length
-                          } else decimals = 0
-                        }
-                        if (lot && lot.minQty) minQty = Number(lot.minQty)
-                        if (minNot && (minNot.notional || minNot.minNotional)) minNotional = Number(minNot.notional || minNot.minNotional || 0)
-                      }
-                    }
-                  } catch (err) {
-                    // ignore — we'll still perform a best-effort rounding
-                  }
-
-                  // compute quantity from USDT and price, then floor to allowed decimals
-                  let rawQty = (usdt / priceNum)
-                  const factor = Math.pow(10, decimals)
-                  let qty = Math.floor(rawQty * factor) / factor
-                  if (qty <= 0) {
-                    const msg = 'Computed quantity is zero'
-                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                    setTestFeedback({ type: 'error', msg })
-                    setTimeout(() => setTestFeedback(null), 8000)
-                    return
-                  }
-
-                  // validate minQty
-                  if (minQty && qty < minQty) {
-                    const msg = `Quantity ${qty} smaller than symbol minQty ${minQty}`
-                    setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                    setTestFeedback({ type: 'error', msg })
-                    setTimeout(() => setTestFeedback(null), 8000)
-                    return
-                  }
-
-                  // validate minNotional (requires price)
-                  if (minNotional && isFinite(priceNum)) {
-                    const notional = qty * priceNum
-                    if (notional < minNotional) {
-                      const msg = `Notional ${notional.toFixed(2)} < minNotional ${minNotional}`
-                      setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                      setTestFeedback({ type: 'error', msg })
-                      setTimeout(() => setTestFeedback(null), 8000)
-                      return
-                    }
-                  }
-
-                  const body = { symbol: String(symbol || 'BTCUSDT'), side: 'BUY', type: 'MARKET', quantity: String(qty) }
-                  if (sendLive) {
-                    // attempt to POST to backend endpoints
-                    const backendUrls = ['http://127.0.0.1:3000/api/futures/order', '/api/futures/order']
-                    let sent = false
-                    for (const url of backendUrls) {
-                      try {
-                        const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-                        const data = await resp.json()
-                        const msg = `Backend response: ${resp.status} ${JSON.stringify(data)}`
-                        setAlerts(prev => [{ id: Date.now(), type: resp.ok ? 'order' : 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                        setTestFeedback({ type: resp.ok ? 'success' : 'error', msg })
-                        const orderEntry = { id: Date.now(), symbol: body.symbol, side: body.side, quantity: body.quantity, usdt: usdt, time: Date.now(), status: resp.ok ? 'sent' : 'error', response: data }
-                        setOrders(prev => { const next = [orderEntry, ...prev].slice(0,200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
-                        setTimeout(() => setTestFeedback(null), 8000)
-                        sent = true
-                        break
-                      } catch (err) {
-                        // try next
-                      }
-                    }
-                    if (!sent) {
-                      const msg = 'Failed to reach backend. Order not sent.'
-                      setAlerts(prev => [{ id: Date.now(), type: 'error', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                      setTestFeedback({ type: 'error', msg })
-                      const orderEntry = { id: Date.now(), symbol: body.symbol, side: body.side, quantity: body.quantity, usdt: usdt, time: Date.now(), status: 'error' }
-                      setOrders(prev => { const next = [orderEntry, ...prev].slice(0,200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
-                      setTimeout(() => setTestFeedback(null), 8000)
-                    }
-                  } else {
-                    // simulate only
-                    const msg = `Simulated order: ${body.side} ${body.quantity} ${body.symbol}`
-                    setAlerts(prev => [{ id: Date.now(), type: 'sim', time: Date.now(), price: lastPrice, msg }, ...prev].slice(0,50))
-                    const orderEntry = { id: Date.now(), symbol: body.symbol, side: body.side, quantity: body.quantity, usdt: usdt, time: Date.now(), status: 'simulated' }
-                    setOrders(prev => { const next = [orderEntry, ...prev].slice(0,200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
-                    setTestFeedback({ type: 'info', msg })
-                    setTimeout(() => setTestFeedback(null), 8000)
-                  }
-                }}>Test Order</button>
-                {/* feedback message shown under the button */}
-              </div>
-              {testFeedback ? (
-                <div style={{marginTop:8}}>
-                  <div className={"test-feedback " + (testFeedback.type === 'success' ? 'test-success' : (testFeedback.type === 'error' ? 'test-error' : 'test-info'))}>{testFeedback.msg}</div>
-                </div>
-              ) : null}
+              {/* Test Order removed */}
             </div>
 
             <div style={{marginTop:12}}>
