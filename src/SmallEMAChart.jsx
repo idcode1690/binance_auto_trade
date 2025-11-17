@@ -196,7 +196,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     // determine a typical wheel step for the current viewCount
     const base = Math.min(viewCount, Math.max(minView, points))
     const step = Math.max(1, Math.round(base * 0.12))
-    const delta = step * 4 // apply initial zoom equal to 4 wheel steps (a bit larger)
+    const delta = step * 3 // apply initial zoom equal to 3 wheel steps (per request)
     const next = Math.max(minView, base - delta)
     if (next !== viewCount) setViewCount(next)
     initialZoomAppliedRef.current = true
