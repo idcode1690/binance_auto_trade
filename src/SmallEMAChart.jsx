@@ -20,12 +20,12 @@ function computeEMA(values, period) {
   return out
 }
 
-export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice = null, onTrade = null, onCross = null }) {
+export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice = null, onTrade = null, onCross = null, emaShort = 26, emaLong = 200 }) {
   const [klines, setKlines] = useState([])
-  const [ema26, setEma26] = useState([])
-  const [ema200, setEma200] = useState([])
-  const ema26Ref = useRef(null)
-  const ema200Ref = useRef(null)
+  const [emaShortArr, setEmaShortArr] = useState([])
+  const [emaLongArr, setEmaLongArr] = useState([])
+  const emaShortRef = useRef(null)
+  const emaLongRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -102,13 +102,13 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   useEffect(() => {
     if (!klines || klines.length === 0) return
     const closes = klines.map(p => p.close)
-    const full26 = computeEMA(closes, 26)
-    const full200 = computeEMA(closes, 200)
-    setEma26(full26)
-    setEma200(full200)
-    ema26Ref.current = full26.length ? full26[full26.length - 1] : null
-    ema200Ref.current = full200.length ? full200[full200.length - 1] : null
-  }, [klines])
+    const fullShort = computeEMA(closes, emaShort)
+    const fullLong = computeEMA(closes, emaLong)
+    setEmaShortArr(fullShort)
+    setEmaLongArr(fullLong)
+    emaShortRef.current = fullShort.length ? fullShort[fullShort.length - 1] : null
+    emaLongRef.current = fullLong.length ? fullLong[fullLong.length - 1] : null
+  }, [klines, emaShort, emaLong])
 
   const pendingPriceRef = useRef(null)
   const rafRef = useRef(null)
@@ -140,23 +140,23 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
         })
 
         try {
-          if (ema26Ref.current != null && ema200Ref.current != null) {
-            const k26 = 2 / (26 + 1)
-            const k200 = 2 / (200 + 1)
-            const new26 = priceToApply * k26 + ema26Ref.current * (1 - k26)
-            const new200 = priceToApply * k200 + ema200Ref.current * (1 - k200)
-            ema26Ref.current = new26
-            ema200Ref.current = new200
-            setEma26(prev => {
+          if (emaShortRef.current != null && emaLongRef.current != null) {
+            const kShort = 2 / (emaShort + 1)
+            const kLong = 2 / (emaLong + 1)
+            const newShort = priceToApply * kShort + emaShortRef.current * (1 - kShort)
+            const newLong = priceToApply * kLong + emaLongRef.current * (1 - kLong)
+            emaShortRef.current = newShort
+            emaLongRef.current = newLong
+            setEmaShortArr(prev => {
               if (!prev || prev.length === 0) return prev
               const copy = prev.slice()
-              copy[copy.length - 1] = new26
+              copy[copy.length - 1] = newShort
               return copy
             })
-            setEma200(prev => {
+            setEmaLongArr(prev => {
               if (!prev || prev.length === 0) return prev
               const copy = prev.slice()
-              copy[copy.length - 1] = new200
+              copy[copy.length - 1] = newLong
               return copy
             })
           }
@@ -177,8 +177,8 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
   const viewN = Math.min(points, 120)
   const slice = klines.slice(-viewN)
-  const e26s = ema26.slice(-viewN)
-  const e200s = ema200.slice(-viewN)
+  const eShorts = emaShortArr.slice(-viewN)
+  const eLongs = emaLongArr.slice(-viewN)
 
   const highs = slice.map(s => s.high)
   const lows = slice.map(s => s.low)
@@ -201,15 +201,15 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     return d
   }
 
-  const path26 = makePath(e26s)
-  const path200 = makePath(e200s)
+  const pathShort = makePath(eShorts)
+  const pathLong = makePath(eLongs)
 
   const crosses = []
   for (let i = 1; i < viewN; i++) {
-    const aPrev = e26s[i - 1]
-    const bPrev = e200s[i - 1]
-    const a = e26s[i]
-    const b = e200s[i]
+    const aPrev = eShorts[i - 1]
+    const bPrev = eLongs[i - 1]
+    const a = eShorts[i]
+    const b = eLongs[i]
     if (a == null || b == null || aPrev == null || bPrev == null) continue
     const prevDiff = aPrev - bPrev
     const currDiff = a - b
@@ -227,14 +227,14 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const notifiedRef = useRef(new Set())
   useEffect(() => {
     if (!onCross) return
-    if (!e26s || !e200s) return
-    const n = Math.min(e26s.length, e200s.length)
+    if (!eShorts || !eLongs) return
+    const n = Math.min(eShorts.length, eLongs.length)
     if (n < 2) return
     const i = n - 1
-    const aPrev = e26s[i - 1]
-    const bPrev = e200s[i - 1]
-    const a = e26s[i]
-    const b = e200s[i]
+    const aPrev = eShorts[i - 1]
+    const bPrev = eLongs[i - 1]
+    const a = eShorts[i]
+    const b = eLongs[i]
     if (a == null || b == null || aPrev == null || bPrev == null) return
     const prevDiff = aPrev - bPrev
     const currDiff = a - b
@@ -249,7 +249,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
         try { onCross({ type, time, price: klines[klines.length - 1].close }) } catch (e) {}
       }
     }
-  }, [e26s, e200s])
+  }, [eShorts, eLongs])
 
   if (points === 0) return <div className="meta">Loading chart...</div>
 
@@ -276,16 +276,16 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
           )
         })}
 
-        {path200 && <path className="ema200" d={path200} fill="none" stroke="#888" strokeWidth={1.2} />}
-        {path26 && <path className="ema26" d={path26} fill="none" stroke="#ff9900" strokeWidth={1.6} />}
+        {pathLong && <path className="ema200" d={pathLong} fill="none" stroke="#888" strokeWidth={1.2} />}
+        {pathShort && <path className="ema26" d={pathShort} fill="none" stroke="#ff9900" strokeWidth={1.6} />}
 
         {crosses.map((c, idx) => (
           <circle key={idx} className={"cross-marker " + (c.type === 'bull' ? 'bull' : 'bear')} cx={c.x} cy={c.y} r={4} />
         ))}
       </svg>
       <div className="chart-legend">
-        <span className="legend-item"><span className="swatch ema26"/>EMA26</span>
-        <span className="legend-item"><span className="swatch ema200"/>EMA200</span>
+        <span className="legend-item"><span className="swatch ema26"/>{`EMA${emaShort}`}</span>
+        <span className="legend-item"><span className="swatch ema200"/>{`EMA${emaLong}`}</span>
         <span className="legend-item"><span className="swatch bull"/>Bull Cross</span>
         <span className="legend-item"><span className="swatch bear"/>Bear Cross</span>
       </div>

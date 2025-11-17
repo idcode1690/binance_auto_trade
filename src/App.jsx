@@ -34,6 +34,9 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [alerts, setAlerts] = useState([])
+  const [emaShort, setEmaShort] = useState(26)
+  const [emaLong, setEmaLong] = useState(200)
+  const [minutes, setMinutes] = useState(1)
   const price = lastPrice == null ? '' : Number(lastPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })
   const change = ''
   const candles = 0
@@ -61,10 +64,21 @@ export default function App() {
                 Render behind a user toggle and React.Suspense so we can
                 enable it step-by-step and capture any initialization errors. */}
             <div style={{marginTop: 8}}>
+              <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+                <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
+                <input type="number" min={1} value={emaShort} onChange={e=>setEmaShort(Number(e.target.value)||1)} style={{width:72,padding:6,borderRadius:6,border:'1px solid rgba(255,255,255,0.04)'}} />
+                <label style={{fontSize:13,color:'var(--muted)'}}>EMA2:</label>
+                <input type="number" min={1} value={emaLong} onChange={e=>setEmaLong(Number(e.target.value)||1)} style={{width:72,padding:6,borderRadius:6,border:'1px solid rgba(255,255,255,0.04)'}} />
+                <label style={{fontSize:13,color:'var(--muted)'}}>Minutes:</label>
+                <input type="number" min={1} value={minutes} onChange={e=>setMinutes(Number(e.target.value)||1)} style={{width:72,padding:6,borderRadius:6,border:'1px solid rgba(255,255,255,0.04)'}} />
+              </div>
               <ChartToggle
                 livePrice={lastPrice}
                 onTrade={setLastPrice}
                 onCross={(c) => setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 50))}
+                emaShort={emaShort}
+                emaLong={emaLong}
+                minutes={minutes}
               />
             </div>
           </div>
@@ -102,15 +116,18 @@ export default function App() {
   )
 }
 
-function ChartToggle({ livePrice, onTrade, onCross }) {
+function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1 }) {
+  const interval = `${Math.max(1, Number(minutes||1))}m`
   return (
     <Suspense fallback={<div className="meta">Loading chart...</div>}>
       <SmallEMAChart
-        interval="1m"
+        interval={interval}
         limit={300}
         livePrice={livePrice}
         onTrade={onTrade}
         onCross={onCross}
+        emaShort={Number(emaShort)||26}
+        emaLong={Number(emaLong)||200}
       />
     </Suspense>
   )
