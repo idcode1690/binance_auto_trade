@@ -14,7 +14,8 @@ function floorTo5MinSec(ms) {
 export default function App() {
   // DEV: force using internal SVG fallback to avoid external TradingView loading issues
   // Set to true to force the app to show the internal chart (useful when tv.js is blocked)
-  const FORCE_FALLBACK = true
+  // Set to false to attempt loading TradingView from CDN/local script.
+  const FORCE_FALLBACK = false
   const [connected, setConnected] = useState(false)
   const [lastPrice, setLastPrice] = useState(null)
   const [displayPrice, setDisplayPrice] = useState(null)
