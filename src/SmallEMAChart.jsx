@@ -43,6 +43,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
           high: parseFloat(r[2]),
           low: parseFloat(r[3]),
           close: parseFloat(r[4]),
+          closed: true,
           time: r[0]
         }))
         if (cancelled) return
@@ -71,7 +72,8 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
               high: parseFloat(k.h),
               low: parseFloat(k.l),
               close: parseFloat(k.c),
-              time: k.t
+              time: k.t,
+              closed: !!k.x // k.x is true when the kline is closed
             }
             setKlines(prev => {
               if (!prev || prev.length === 0) return [candle]
@@ -212,6 +214,9 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   useEffect(() => {
     if (!onCross) return
     if (!emaShortArr || !emaLongArr) return
+    // only detect crosses when the latest candle is closed
+    const lastK = klines && klines.length > 0 ? klines[klines.length - 1] : null
+    if (!lastK || !lastK.closed) return
     const n = Math.min(emaShortArr.length, emaLongArr.length)
     if (n < 2) return
     const i = n - 1
