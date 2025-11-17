@@ -21,11 +21,7 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
-      - name: Upload artifact for GitHub Pages
-        # use the latest upload-pages-artifact major (v2) to avoid deprecated transitive actions
-        uses: actions/upload-pages-artifact@v2
-        with:
-          path: ./dist
+      # artifact upload removed: deploy uses JamesIves/github-pages-deploy-action directly
 
   deploy:
     needs: build
