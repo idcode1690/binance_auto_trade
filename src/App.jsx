@@ -89,6 +89,32 @@ export default function App() {
   // Poll backend for Binance Futures account info (requires server running and .env set)
   useEffect(() => {
     let mounted = true
+    // try SSE subscription for realtime account updates; polling remains as fallback
+    try {
+      const es = new EventSource('/api/futures/sse')
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data)
+          if (!mounted) return
+          if (data) {
+            setAccount(data)
+            if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+              try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+              setFuturesBalanceStr(String(data.totalWalletBalance))
+            }
+            if (Array.isArray(data.positions) && symbol) {
+              const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+              if (p) {
+                const amt = Number(p.positionAmt) || 0
+                try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+                setHoldingsStr(String(amt))
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      es.onerror = () => { try { es.close() } catch (e) {} }
+    } catch (e) {}
     const backendUrls = [
       'http://127.0.0.1:3000/api/futures/account',
       '/api/futures/account'
