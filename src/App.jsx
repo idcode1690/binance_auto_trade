@@ -372,7 +372,7 @@ function CandlestickChart({ data = [], height = 360 }) {
   return (
     <div ref={ref} style={{width:'100%'}}>
       <svg width="100%" height={h} viewBox={`0 0 ${logicalWidth} ${h}`} preserveAspectRatio="none">
-        <rect x={0} y={0} width={logicalWidth} height={h} fill="#071126" />
+        <rect x={0} y={0} width={logicalWidth} height={h} fill="#041327" />
         {data.map((d, i) => {
           const x = pad + i * unit
           const openY = yFor(d.open)
@@ -382,7 +382,7 @@ function CandlestickChart({ data = [], height = 360 }) {
           const bodyTop = Math.min(openY, closeY)
           const bodyHeight = Math.max(0.5, Math.abs(closeY - openY))
           const up = d.close >= d.open
-          const color = up ? '#16a34a' : '#dc2626'
+          const color = up ? '#26a69a' : '#ff4d4f'
           // wick x center
           const centerX = x + barUnit / 2
           // collect EMA polyline points
@@ -396,8 +396,8 @@ function CandlestickChart({ data = [], height = 360 }) {
           )
         })}
 
-        {points26.length > 0 && <polyline points={points26.map(p => p.join(',')).join(' ')} fill="none" stroke="#60a5fa" strokeWidth={0.9} strokeLinecap="round" />}
-        {points200.length > 0 && <polyline points={points200.map(p => p.join(',')).join(' ')} fill="none" stroke="#f97316" strokeWidth={0.9} strokeLinecap="round" />}
+        {points26.length > 0 && <polyline points={points26.map(p => p.join(',')).join(' ')} fill="none" stroke="#f3b000" strokeWidth={1.2} strokeLinecap="round" />}
+        {points200.length > 0 && <polyline points={points200.map(p => p.join(',')).join(' ')} fill="none" stroke="#ff7a00" strokeWidth={1.2} strokeLinecap="round" />}
       </svg>
     </div>
   )
@@ -419,10 +419,10 @@ function LightweightChart({ data = [] }) {
       const chart = createChart(el, {
         width: el.clientWidth,
         height: el.clientHeight,
-        layout: { background: { color: '#071126' }, textColor: '#d1d5db' },
-        grid: { vertLines: { color: '#0b1220' }, horzLines: { color: '#0b1220' } },
-        rightPriceScale: { borderColor: '#0b1220' },
-        timeScale: { borderColor: '#0b1220' }
+        layout: { background: { color: '#041327' }, textColor: '#dbe9f5' },
+        grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+        rightPriceScale: { borderColor: 'rgba(255,255,255,0.03)' },
+        timeScale: { borderColor: 'rgba(255,255,255,0.03)' }
       })
 
       // defensive: ensure returned object is a lightweight-charts chart
@@ -435,12 +435,12 @@ function LightweightChart({ data = [] }) {
       chartRef.current = chart
 
       const candleSeries = chart.addCandlestickSeries({
-        upColor: '#16a34a', downColor: '#dc2626', wickUpColor: '#16a34a', wickDownColor: '#dc2626'
+        upColor: '#26a69a', downColor: '#ff4d4f', wickUpColor: '#26a69a', wickDownColor: '#ff4d4f', borderVisible: true
       })
       candleSeriesRef.current = candleSeries
 
-      const e26 = chart.addLineSeries({ color: '#60a5fa', lineWidth: 2 })
-      const e200 = chart.addLineSeries({ color: '#f97316', lineWidth: 2 })
+      const e26 = chart.addLineSeries({ color: '#f3b000', lineWidth: 1.5 })
+      const e200 = chart.addLineSeries({ color: '#ff7a00', lineWidth: 1.5 })
       ema26RefSeries.current = e26
       ema200RefSeries.current = e200
 

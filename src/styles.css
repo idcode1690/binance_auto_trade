@@ -1,13 +1,13 @@
 :root{
-  --bg:#1e1e1f; /* VSCode/Darcula base */
-  --surface:#252526;
-  --card:#2d2d30;
-  --muted:#9a9a9a;
-  --text:#d4d4d4;
-  --accent:#007acc; /* VSCode blue */
-  --success:#4ec9b0;
-  --danger:#f44747;
-  --border:#3c3c3c;
+  --bg:#071127; /* dark Binance-like background */
+  --surface:#0b1724;
+  --card:#0f2233;
+  --muted:#9aa6b2;
+  --text:#dbe9f5;
+  --accent:#f3b000; /* Binance yellow accent */
+  --success:#26a69a; /* up candle color */
+  --danger:#ff4d4f; /* down candle color */
+  --border:rgba(255,255,255,0.03);
 }
 html,body,#root{
   height:100%;
