@@ -202,7 +202,7 @@ export default function App() {
                     return (
                       <div className="positions-table" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,overflow:'hidden'}}>
                         <div style={{display:'flex',padding:'8px 10px',background:'rgba(0,0,0,0.02)',fontSize:12,fontWeight:700}}>
-                          <div style={{flex:2}}>Symbol</div>
+                          <div style={{flex:1.2}}>Symbol</div>
                           <div style={{flex:1,textAlign:'right'}}>Lev</div>
                           <div style={{flex:1,textAlign:'right'}}>Size</div>
                           <div style={{flex:1,textAlign:'right'}}>Entry Price</div>
@@ -229,7 +229,7 @@ export default function App() {
                           const pnlColor = upl >= 0 ? 'var(--bull)' : 'var(--bear)'
                           return (
                             <div key={p.symbol} style={{display:'flex',padding:'8px 10px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
-                              <div style={{flex:2}}>{p.symbol}</div>
+                              <div style={{flex:1.2}}>{p.symbol}</div>
                               <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
                               <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
                               <div style={{flex:1,textAlign:'right'}}>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
