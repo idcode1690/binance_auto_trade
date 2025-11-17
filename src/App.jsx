@@ -425,7 +425,8 @@ function CandlestickChart({ data = [], height = 360 }) {
         {/* horizontal grid + right price labels */}
         {priceTicks.map((pv, idx) => {
           const y = yFor(pv)
-          const label = Number(pv).toLocaleString(undefined, {maximumFractionDigits:2})
+          // force english/US number formatting
+          const label = Number(pv).toLocaleString('en-US', {maximumFractionDigits:2})
           return (
             <g key={'g'+idx}>
               <line x1={pad} x2={logicalWidth - pad} y1={y} y2={y} stroke="rgba(255,255,255,0.03)" strokeWidth={0.6} />
@@ -467,7 +468,8 @@ function CandlestickChart({ data = [], height = 360 }) {
           if (i % timeLabelStep !== 0) return null
           const x = pad + i * unit + barUnit / 2
           const dt = new Date(d.time * 1000)
-          const label = dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+          // force english time formatting (e.g., 02:15 PM)
+          const label = dt.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', hour12: true})
           return <text key={'t'+i} x={x} y={h - 4} fontSize={10} fill="#9aa6b2" textAnchor="middle">{label}</text>
         })}
       </svg>
