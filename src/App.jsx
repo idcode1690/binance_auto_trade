@@ -7,6 +7,79 @@ function formatNumber(n) {
   return Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
+function DashboardCard({ candles = [], displayPrice, lastPrice, ema26, ema200, connected, startWs, stopWs }) {
+  const items = (candles || []).slice(-60).map(d => d.close).filter(v => typeof v === 'number')
+  const points = []
+  const w = 320, h = 72, pad = 6
+  if (items.length > 0) {
+    const min = Math.min(...items)
+    const max = Math.max(...items)
+    const range = Math.max(1e-6, max - min)
+    items.forEach((v, i) => {
+      const x = pad + (i / Math.max(1, items.length - 1)) * (w - pad * 2)
+      const y = pad + (1 - (v - min) / range) * (h - pad * 2)
+      points.push([x, y])
+    })
+  }
+  const last = items.length ? items[items.length - 1] : (displayPrice ?? lastPrice)
+  const first = items.length ? items[0] : last
+  const changePct = (first && last) ? ((last - first) / first * 100) : 0
+  const up = changePct >= 0
+
+  return (
+    <div className="dashboard">
+      <div className="price-row">
+        <div>
+          <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
+          <div className="chg">{up ? '▲' : '▼'} {changePct ? Math.abs(changePct).toFixed(2) + '%' : '—'}</div>
+        </div>
+        <div style={{marginLeft:16}}>
+          <div className="small">EMA26: {ema26 == null ? '—' : formatNumber(ema26)}</div>
+          <div className="small">EMA200: {ema200 == null ? '—' : formatNumber(ema200)}</div>
+        </div>
+        <div style={{marginLeft:'auto', textAlign:'right'}}>
+          <div className="small">Status:</div>
+          <div style={{marginTop:6}}><span className="status" style={{background: connected ? 'var(--success)' : '#3b1b1b'}}>{connected ? 'Connected' : 'Disconnected'}</span></div>
+        </div>
+      </div>
+
+      <div className="sparkline" aria-hidden>
+        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+          <rect x={0} y={0} width={w} height={h} fill="transparent" />
+          {points.length > 0 && (
+            <polyline
+              points={points.map(p => p.join(',')).join(' ')}
+              fill="none"
+              stroke={up ? 'var(--success)' : 'var(--danger)'}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+        </svg>
+      </div>
+
+      <div className="stats">
+        <div className="stat">
+          <div className="label">Latest</div>
+          <div className="value">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
+        </div>
+        <div className="stat">
+          <div className="label">Change (span)</div>
+          <div className="value" style={{color: up ? 'var(--success)' : 'var(--danger)'}}>{up ? '+' : '-'}{Math.abs(changePct).toFixed(2)}%</div>
+        </div>
+        <div className="stat">
+          <div className="label">Candles</div>
+          <div className="value">{candles.length}</div>
+        </div>
+        <div style={{marginLeft:12}}>
+          <button className="btn" onClick={() => connected ? stopWs() : startWs()}>{connected ? 'Stop' : 'Start'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // floor ms timestamp to 5-minute bucket start (in seconds)
 function floorTo5MinSec(ms) {
   return Math.floor(ms / 1000 / 300) * 300
@@ -343,15 +416,17 @@ export default function App() {
       </div>
 
       <div className="main-grid">
-          <div className="main-chart card no-frame" style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <div style={{padding:20,textAlign:'center'}}>
-              <div style={{fontSize:18,fontWeight:700}}>Chart removed</div>
-              <div className="meta" style={{marginTop:8}}>You removed the chart UI — live price and alerts still active.</div>
-              <div style={{marginTop:12}}>
-                <div className="meta">Latest Price</div>
-                <div className="price">{(displayPrice == null && lastPrice == null) ? '—' : formatNumber(displayPrice ?? lastPrice)}</div>
-              </div>
-            </div>
+          <div className="main-chart card no-frame">
+            <DashboardCard
+              candles={candles}
+              displayPrice={displayPrice}
+              lastPrice={lastPrice}
+              ema26={ema26}
+              ema200={ema200}
+              connected={connected}
+              startWs={startWs}
+              stopWs={stopWs}
+            />
           </div>
 
         <aside className="sidebar">

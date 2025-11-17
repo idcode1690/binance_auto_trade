@@ -57,6 +57,29 @@ body {
   flex-direction: column;
   min-height: 0; /* allow children to shrink */
 }
+
+/* Dashboard card in place of chart */
+.dashboard {
+  width:100%;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  box-sizing:border-box;
+}
+.dashboard .price-row { display:flex; align-items:baseline; gap:12px }
+.dashboard .price { font-size:36px; font-weight:800 }
+.dashboard .chg { font-size:14px; color:var(--muted) }
+.dashboard .small { font-size:12px; color:var(--muted) }
+.sparkline { width:320px; height:72px; border-radius:6px; background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent); padding:8px }
+.sparkline svg { width:100%; height:100% }
+.dashboard .stats { display:flex; gap:16px; align-items:center }
+.stat { display:flex; flex-direction:column; align-items:center }
+.stat .label { font-size:12px; color:var(--muted) }
+.stat .value { font-weight:700 }
 .sidebar {
   background: var(--surface);
   border-radius: 8px;
