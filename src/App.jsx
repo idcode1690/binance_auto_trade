@@ -129,7 +129,7 @@ export default function App() {
 
   return (
     <div className="container body-root">
-      <Hero title="Binance BTC/USDT" />
+      <Hero title="Binance Auto Trading System" />
 
       <main className="main-grid">
         <section className="main-chart card">
