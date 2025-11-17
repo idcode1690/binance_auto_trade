@@ -72,15 +72,19 @@ app.get('/api/futures/account', async (req, res) => {
   try {
     // fetch main account snapshot (includes balances + positions)
     const data = await signedGet('/fapi/v2/account')
-    // Return essential fields only
+    // Return essential fields only and parse numeric fields so frontend can consume reliably
     const out = {
-      totalWalletBalance: data.totalWalletBalance || null,
-      totalUnrealizedProfit: data.totalUnrealizedProfit || null,
+      totalWalletBalance: typeof data.totalWalletBalance !== 'undefined' ? Number(data.totalWalletBalance) : null,
+      totalUnrealizedProfit: typeof data.totalUnrealizedProfit !== 'undefined' ? Number(data.totalUnrealizedProfit) : null,
       positions: Array.isArray(data.positions) ? data.positions.map(p => ({
         symbol: p.symbol,
-        positionAmt: p.positionAmt,
-        entryPrice: p.entryPrice,
-        unrealizedProfit: p.unRealizedProfit || p.unrealizedProfit || 0
+        // parsed numeric values (numbers, not strings)
+        positionAmt: Number(p.positionAmt) || 0,
+        entryPrice: Number(p.entryPrice) || 0,
+        unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+        leverage: p.leverage ? Number(p.leverage) : undefined,
+        marginType: p.marginType || p.marginType || undefined,
+        positionSide: p.positionSide || undefined
       })) : []
     }
     res.json(out)
@@ -130,17 +134,18 @@ app.get('/api/futures/sse', async (req, res) => {
     if (closed) return
     try {
       const data = await signedGet('/fapi/v2/account')
-      // Create a small payload
+      // Create a small payload with parsed numeric fields
       const out = {
-        totalWalletBalance: data.totalWalletBalance || null,
-        totalUnrealizedProfit: data.totalUnrealizedProfit || null,
+        totalWalletBalance: typeof data.totalWalletBalance !== 'undefined' ? Number(data.totalWalletBalance) : null,
+        totalUnrealizedProfit: typeof data.totalUnrealizedProfit !== 'undefined' ? Number(data.totalUnrealizedProfit) : null,
         positions: Array.isArray(data.positions) ? data.positions.map(p => ({
           symbol: p.symbol,
-          positionAmt: p.positionAmt,
-          entryPrice: p.entryPrice,
-          unrealizedProfit: p.unRealizedProfit || p.unrealizedProfit || 0,
-          leverage: p.leverage,
-          marginType: p.marginType
+          positionAmt: Number(p.positionAmt) || 0,
+          entryPrice: Number(p.entryPrice) || 0,
+          unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+          leverage: p.leverage ? Number(p.leverage) : undefined,
+          marginType: p.marginType || undefined,
+          positionSide: p.positionSide || undefined
         })) : []
       }
       const snap = JSON.stringify(out)
