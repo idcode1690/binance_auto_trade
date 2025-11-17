@@ -206,38 +206,4 @@ body {
   .btn { padding:7px 10px }
 }
 
-/* Fullscreen styling: make the app expand to the entire viewport */
-.fullscreen-btn { font-size:13px; padding:6px 10px }
-
-body.app-fullscreen {
-  margin: 0;
-  height: 100vh;
-  background: #000; /* subtle backdrop in fullscreen */
-}
-
-body.app-fullscreen .container {
-  max-width: none;
-  width: 100%;
-  margin: 0;
-  padding: 12px;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Ensure the main grid fills available vertical space in fullscreen */
-body.app-fullscreen .main-grid {
-  grid-template-columns: 1fr 360px;
-  gap: 18px;
-  min-height: calc(100vh - 110px);
-}
-
-/* Make chart take remaining vertical space */
-body.app-fullscreen .main-chart { flex: 1 1 auto; min-height: 0 }
-
-/* Slightly reduce sidebar shadow in fullscreen to reduce distraction */
-body.app-fullscreen .sidebar { box-shadow: 0 4px 12px rgba(0,0,0,0.6) }
-
-/* Small adjustments for the fullscreen button to match theme */
-.fullscreen-btn { background: rgba(255,255,255,0.04); color: var(--text); border: 1px solid rgba(255,255,255,0.04) }
-.fullscreen-btn:hover { box-shadow: 0 4px 18px rgba(0,0,0,0.5) }
+/* fullscreen styles removed - fullscreen is not available by default */
