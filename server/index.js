@@ -70,6 +70,16 @@ function stepSizeToDecimals(step) {
 
 app.get('/api/futures/account', async (req, res) => {
   try {
+    // If API keys are missing, return a consistent empty snapshot with a warning
+    if (!API_KEY || !API_SECRET) {
+      return res.json({
+        totalWalletBalance: 0,
+        totalUnrealizedProfit: 0,
+        positions: [],
+        warning: 'Missing BINANCE_API_KEY or BINANCE_API_SECRET on server'
+      })
+    }
+
     // fetch main account snapshot (includes balances + positions)
     const data = await signedGet('/fapi/v2/account')
     // Return essential fields only and parse numeric fields so frontend can consume reliably
@@ -89,7 +99,17 @@ app.get('/api/futures/account', async (req, res) => {
     }
     res.json(out)
   } catch (err) {
-    console.error('futures/account error', err && err.response ? err.response.data : err.message)
+    const remote = err && err.response
+    console.error('futures/account error', remote ? remote.data : err.message)
+    // If Binance returned an auth error (401), return an empty snapshot with a warning
+    if (remote && remote.status === 401) {
+      return res.json({
+        totalWalletBalance: 0,
+        totalUnrealizedProfit: 0,
+        positions: [],
+        warning: 'Binance authentication failed (401). Check API key/secret or testnet setting.'
+      })
+    }
     res.status(500).json({ error: String(err && err.message) })
   }
 })
@@ -107,11 +127,7 @@ app.get('/api/config', (req, res) => {
 // This provides near-real-time updates for positions without requiring the frontend
 // to manage Binance user data websockets.
 app.get('/api/futures/sse', async (req, res) => {
-  if (!API_KEY || !API_SECRET) {
-    res.status(400).json({ error: 'Missing API keys on server' })
-    return
-  }
-
+  // SSE always connects; if API keys are missing we will emit a warning event
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -133,6 +149,12 @@ app.get('/api/futures/sse', async (req, res) => {
   const poll = async () => {
     if (closed) return
     try {
+      if (!API_KEY || !API_SECRET) {
+        // Emit a warning so the frontend can show a message and keep an empty snapshot
+        send('account', { totalWalletBalance: 0, totalUnrealizedProfit: 0, positions: [], warning: 'Missing BINANCE_API_KEY or BINANCE_API_SECRET on server' })
+        return
+      }
+
       const data = await signedGet('/fapi/v2/account')
       // Create a small payload with parsed numeric fields
       const out = {
@@ -154,7 +176,13 @@ app.get('/api/futures/sse', async (req, res) => {
         send('account', out)
       }
     } catch (err) {
-      console.error('sse poll error', err && err.response ? err.response.data : err.message)
+      const remote = err && err.response
+      console.error('sse poll error', remote ? remote.data : err.message)
+      // If authentication error, emit an account event with a warning so frontend stays consistent
+      if (remote && remote.status === 401) {
+        send('account', { totalWalletBalance: 0, totalUnrealizedProfit: 0, positions: [], warning: 'Binance authentication failed (401). Check API key/secret or testnet setting.' })
+        return
+      }
     }
   }
 
