@@ -98,7 +98,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
     load()
     return () => { cancelled = true; try { if (ws) ws.close() } catch {} }
-  }, [interval, limit])
+  }, [interval, limit, symbol, onTrade])
 
   useEffect(() => {
     if (!klines || klines.length === 0) return
