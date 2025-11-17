@@ -300,7 +300,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
   return (
     <div onWheel={handleWheel} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
-      <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{width: '100%', height: height}}>
+      <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{width: '100%', height: 'auto', display: 'block'}}>
           {slice.map((c, i) => {
           // skip invalid candle data
           if (![c.open, c.high, c.low, c.close].every(x => isFinite(Number(x)))) return null
