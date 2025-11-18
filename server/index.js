@@ -25,7 +25,8 @@ let userData = {
   listenKey: null,
   ws: null,
   keepaliveInterval: null,
-  reconnectTimer: null
+  reconnectTimer: null,
+  reconnectBackoffMs: 1000
 }
 
 function sign(queryString) {
@@ -259,6 +260,10 @@ async function startUserDataStream() {
 
     ws.on('open', () => {
       console.log('user-data ws open')
+      // reset backoff on successful open
+      userData.reconnectBackoffMs = 1000
+      // stop account polling while ws is active (ws will drive updates)
+      try { stopAccountPolling() } catch (e) {}
       // immediate fetch of account snapshot to seed cache
       signedGet('/fapi/v2/account').then(d => {
         const out = {
@@ -328,14 +333,24 @@ async function startUserDataStream() {
 
     ws.on('close', (code, reason) => {
       console.warn('user-data ws closed', code, reason)
-      // try reconnect after delay
+      // ensure polling resumes
+      try { startAccountPolling() } catch (e) {}
+      // reconnect with exponential backoff
       if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
-      userData.reconnectTimer = setTimeout(() => startUserDataStream(), 5000)
+      const delay = Math.min(userData.reconnectBackoffMs || 1000, 300000)
+      userData.reconnectTimer = setTimeout(() => startUserDataStream(), delay)
+      // increase backoff for next time
+      userData.reconnectBackoffMs = Math.min((userData.reconnectBackoffMs || 1000) * 2, 300000)
     })
 
     ws.on('error', (err) => {
       console.warn('user-data ws error', err && err.message)
       try { ws.terminate() } catch (e) {}
+      // schedule reconnect with backoff
+      if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
+      const delay = Math.min(userData.reconnectBackoffMs || 1000, 300000)
+      userData.reconnectTimer = setTimeout(() => startUserDataStream(), delay)
+      userData.reconnectBackoffMs = Math.min((userData.reconnectBackoffMs || 1000) * 2, 300000)
     })
 
     // start keepalive: PUT every 30 minutes
@@ -343,13 +358,29 @@ async function startUserDataStream() {
     userData.keepaliveInterval = setInterval(async () => {
       try {
         await axios.put(`${FUTURES_API_BASE}/fapi/v1/listenKey`, `listenKey=${userData.listenKey}`, { headers: { 'X-MBX-APIKEY': API_KEY, 'Content-Type': 'application/x-www-form-urlencoded' } })
-      } catch (e) { }
+      } catch (e) {
+        // if keepalive fails with auth or other errors, recreate the listenKey
+        try {
+          const status = e && e.response && e.response.status ? e.response.status : null
+          console.warn('listenKey keepalive failed', status || e && e.message)
+          // clear existing ws and intervals and try to recreate
+          try { if (userData.ws) { userData.ws.terminate(); userData.ws = null } } catch (ee) {}
+          if (userData.keepaliveInterval) { clearInterval(userData.keepaliveInterval); userData.keepaliveInterval = null }
+          if (userData.reconnectTimer) { clearTimeout(userData.reconnectTimer); userData.reconnectTimer = null }
+          // small delay then restart stream (with backoff)
+          const delay = Math.min(userData.reconnectBackoffMs || 1000, 300000)
+          userData.reconnectTimer = setTimeout(() => startUserDataStream(), delay)
+          userData.reconnectBackoffMs = Math.min((userData.reconnectBackoffMs || 1000) * 2, 300000)
+        } catch (ee) {}
+      }
     }, 1000 * 60 * 30)
 
   } catch (err) {
     console.warn('startUserDataStream failed', err && err.message)
     if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
-    userData.reconnectTimer = setTimeout(() => startUserDataStream(), 10000)
+    const delay = Math.min(userData.reconnectBackoffMs || 1000, 300000)
+    userData.reconnectTimer = setTimeout(() => startUserDataStream(), delay)
+    userData.reconnectBackoffMs = Math.min((userData.reconnectBackoffMs || 1000) * 2, 300000)
   }
 }
 
