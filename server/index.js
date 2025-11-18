@@ -183,6 +183,63 @@ function broadcastAccountUpdate(obj) {
   }
 }
 
+// Poll account snapshot periodically as a fallback in case user-data websocket isn't available
+let accountPollInterval = null
+async function pollAccountSnapshotOnce() {
+  if (!API_KEY || !API_SECRET) return
+  try {
+    const d = await signedGet('/fapi/v2/account')
+    const out = {
+      totalWalletBalance: typeof d.totalWalletBalance !== 'undefined' ? Number(d.totalWalletBalance) : null,
+      totalUnrealizedProfit: typeof d.totalUnrealizedProfit !== 'undefined' ? Number(d.totalUnrealizedProfit) : null,
+      positions: Array.isArray(d.positions) ? d.positions.map(p => ({
+        symbol: p.symbol,
+        positionAmt: Number(p.positionAmt) || 0,
+        entryPrice: Number(p.entryPrice) || 0,
+        unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+        leverage: p.leverage ? Number(p.leverage) : undefined,
+        marginType: p.marginType || undefined,
+        positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
+        isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
+      })) : []
+    }
+    // enrich with premiumIndex where possible (non-blocking)
+    try {
+      const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
+      if (syms.length) {
+        const promises = syms.map(s => axios.get(`${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`).then(r => ({ symbol: s, data: r.data })).catch(() => null))
+        const results = await Promise.all(promises)
+        const map = new Map()
+        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
+        out.positions = out.positions.map(p => {
+          const info = map.get(p.symbol)
+          if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
+          return p
+        })
+      }
+    } catch (e) {}
+    // broadcast to any SSE clients
+    broadcastAccountUpdate(out)
+  } catch (e) {
+    // keep quiet — failures are expected if keys are invalid or network issues occur
+    // but log minimally for debugging
+    // console.warn('pollAccountSnapshotOnce failed', e && e.message)
+  }
+}
+
+function startAccountPolling() {
+  if (accountPollInterval) return
+  accountPollInterval = setInterval(() => pollAccountSnapshotOnce(), 3000)
+  // run immediately once
+  pollAccountSnapshotOnce()
+}
+
+function stopAccountPolling() {
+  if (!accountPollInterval) return
+  clearInterval(accountPollInterval)
+  accountPollInterval = null
+}
+
 // create and maintain futures user-data stream (listenKey)
 async function startUserDataStream() {
   if (!API_KEY) return
@@ -298,6 +355,8 @@ async function startUserDataStream() {
 
 // start the user-data stream if we have keys
 startUserDataStream()
+// also start periodic polling to ensure we have a recent snapshot for SSE clients
+startAccountPolling()
 
 app.post('/api/futures/order', async (req, res) => {
   try {
