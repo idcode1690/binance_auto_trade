@@ -300,13 +300,12 @@ export default function App() {
                 }
                 // next fallback: use totalWalletBalance (user deposit/wallet) if present
                 if (account && typeof account.totalWalletBalance !== 'undefined' && account.totalWalletBalance !== null) {
-                  // mark as estimated since it's a fallback
-                  return formatPrice(Number(account.totalWalletBalance)) + ' (추정)'
+                  return formatPrice(Number(account.totalWalletBalance))
                 }
                 // fallback to local stored futures balance (from earlier successful fetches)
                 try {
                   const stored = Number(futuresBalanceStr || 0)
-                  if (stored && stored > 0) return formatPrice(stored) + ' (추정)'
+                  if (stored && stored > 0) return formatPrice(stored)
                 } catch (e) {}
                 // final attempt: estimate margin balance from positions
                 try {
@@ -331,7 +330,7 @@ export default function App() {
                         if (isFinite(used)) sum += used
                       }
                     }
-                    if (sum > 0) return formatPrice(sum) + ' (추정)'
+                    if (sum > 0) return formatPrice(sum)
                   }
                 } catch (e) {}
                 return '—'
