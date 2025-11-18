@@ -31,6 +31,9 @@ const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'w
 const WebSocketClient = require('ws')
 const { WebSocketServer } = require('ws')
 
+// Option to perform a single safe REST seed when the user-data WS opens.
+const AUTO_SEED_ON_WS_OPEN = String(process.env.AUTO_SEED_ON_WS_OPEN || '').toLowerCase() === 'true'
+
 // Rate limiting / polling configuration (tuneable via env)
 const BINANCE_MIN_INTERVAL_MS = Number(process.env.BINANCE_MIN_INTERVAL_MS) || 250 // minimum ms between Binance HTTP requests (default 250ms -> ~4 req/s)
 const BINANCE_POLL_INTERVAL_MS = Number(process.env.BINANCE_POLL_INTERVAL_MS) || 30000 // account poll interval when WS unavailable (default 30s)
@@ -171,7 +174,8 @@ let userData = {
   ws: null,
   keepaliveInterval: null,
   reconnectTimer: null,
-  reconnectBackoffMs: 1000
+  reconnectBackoffMs: 1000,
+  autoSeedDone: false
 }
 
 function sign(queryString) {
@@ -459,11 +463,26 @@ async function startUserDataStream() {
       console.log('user-data ws open')
       // reset backoff on successful open
       userData.reconnectBackoffMs = 1000
-      // NOTE: we no longer perform an immediate REST fetch to seed the snapshot
-      // to avoid triggering Binance REST rate limits. The server will wait for
-      // ACCOUNT_UPDATE messages on the user-data websocket to populate the
-      // latestAccountSnapshot. Market markPrice updates will be handled by the
-      // separate market websocket stream.
+      // Optionally perform a single safe REST seed when the ws opens. This is
+      // controlled by env var AUTO_SEED_ON_WS_OPEN and guarded to run only once
+      // per server start to avoid accidental rate-limit issues.
+      if (AUTO_SEED_ON_WS_OPEN && !userData.autoSeedDone) {
+        userData.autoSeedDone = true
+        (async () => {
+          try {
+            // respect ban state
+            if (binanceBanUntilMs && binanceBanUntilMs > Date.now()) {
+              console.warn('Skipping auto-seed due to Binance IP ban until', new Date(binanceBanUntilMs).toISOString())
+              return
+            }
+            console.log('AUTO_SEED_ON_WS_OPEN enabled — performing one-time account seed')
+            await seedAccountSnapshot()
+            console.log('AUTO_SEED_ON_WS_OPEN: seed complete')
+          } catch (e) {
+            console.warn('AUTO_SEED_ON_WS_OPEN: seed failed', e && (e.response ? e.response.data : e.message))
+          }
+        })()
+      }
     })
 
     ws.on('message', async (msg) => {
@@ -733,6 +752,55 @@ app.post('/api/futures/account/seed', async (req, res) => {
     res.status(500).json({ error: String(err && err.message), details: err && err.response ? err.response.data : undefined })
   }
 })
+
+// Helper used by the seed endpoint and optionally at ws open.
+async function seedAccountSnapshot() {
+  if (!API_KEY || !API_SECRET) throw new Error('Missing API key/secret on server')
+  if (binanceBanUntilMs && binanceBanUntilMs > Date.now()) throw new Error('Binance IP ban active')
+  const data = await signedGet('/fapi/v2/account')
+  const out = {
+    totalWalletBalance: typeof data.totalWalletBalance !== 'undefined' ? Number(data.totalWalletBalance) : 0,
+    totalUnrealizedProfit: typeof data.totalUnrealizedProfit !== 'undefined' ? Number(data.totalUnrealizedProfit) : 0,
+    positions: Array.isArray(data.positions) ? data.positions.map(p => ({
+      symbol: p.symbol,
+      positionAmt: Number(p.positionAmt) || 0,
+      entryPrice: Number(p.entryPrice) || 0,
+      unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+      leverage: p.leverage ? Number(p.leverage) : undefined,
+      marginType: p.marginType || undefined,
+      positionInitialMargin: Number(p.positionInitialMargin || p.initialMargin || p.initMargin || 0) || 0,
+      isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
+    })) : []
+  }
+  try {
+    const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
+    if (syms.length) {
+      const promises = syms.map(async s => {
+        try { const d = await getPremiumIndexForSymbol(s); return { symbol: s, data: d } } catch (e) { return null }
+      })
+      const results = await Promise.all(promises)
+      const map = new Map()
+      for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
+      out.positions = out.positions.map(p => {
+        const info = map.get(p.symbol)
+        if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
+        return p
+      })
+    }
+  } catch (e) {}
+  // compute availableBalance and marginBalance similarly to ACCOUNT_UPDATE logic
+  let availableBalance = undefined
+  if (Array.isArray(data.assets || data.balances || data.accountBalance || [])) {
+    const arr = data.assets || data.balances || data.accountBalance
+    const b = (arr || []).find(x => (x.a || x.asset || '').toUpperCase() === 'USDT')
+    if (b) availableBalance = Number(b.available || b.free || b.ab || 0) || undefined
+  }
+  const marginBalance = Number(out.totalWalletBalance || 0) + Number(out.totalUnrealizedProfit || 0)
+  const snapshot = { ...out, availableBalance, marginBalance }
+  latestAccountSnapshot = snapshot
+  try { broadcastAccountUpdate(snapshot); broadcastWs({ type: 'snapshot', account: snapshot, ts: Date.now() }) } catch (e) {}
+  return snapshot
+}
 
 // create HTTP server so we can attach a websocket server to the same port
 const http = require('http')
