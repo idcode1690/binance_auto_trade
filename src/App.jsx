@@ -258,6 +258,8 @@ export default function App() {
         setWsStatus('connected')
         setLastWsAt(new Date().toISOString())
         console.info('Account WS connected', url)
+        // request an authoritative snapshot from the server on connect
+        try { ws.send(JSON.stringify({ type: 'get_snapshot' })) } catch (e) {}
       }
 
       ws.onmessage = (ev) => {

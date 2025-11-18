@@ -953,6 +953,15 @@ function startWss() {
     try {
       if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot }))
     } catch (e) {}
+    socket.on('message', (m) => {
+      try {
+        const msg = JSON.parse(m.toString())
+        if (msg && msg.type === 'get_snapshot') {
+          try { if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot })) } catch (e) {}
+        }
+      } catch (e) {}
+    })
+
     socket.on('close', () => { /* client disconnected */ })
   })
 }
