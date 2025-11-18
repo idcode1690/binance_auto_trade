@@ -6,12 +6,15 @@ import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react'
 
 const SmallEMAChart = React.lazy(() => import('./SmallEMAChart'))
 
-function Hero({ title, subtitle }) {
+function Hero({ title, subtitle, statusNode }) {
   return (
-    <header className="hero">
+    <header className="hero" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
       <div>
         <h1 className="hero-title">{title}</h1>
         <p className="hero-sub">{subtitle}</p>
+      </div>
+      <div>
+        {statusNode}
       </div>
       {/* Auto-connect enabled; no manual Connect button */}
     </header>
@@ -416,7 +419,7 @@ export default function App() {
 
   return (
     <div className="container body-root">
-      <Hero title="Binance Auto Trading System" />
+      <Hero title="Binance Auto Trading System" statusNode={<SseIndicator />} />
 
       <main className="main-grid">
         <section className="main-chart card">
@@ -553,7 +556,6 @@ export default function App() {
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
               <h3 style={{marginTop:0, marginBottom:0}}>Futures Account</h3>
-              <SseIndicator />
             </div>
             <div className="meta">
               <AccountSummary account={account} />
