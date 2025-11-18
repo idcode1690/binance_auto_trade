@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react'
-import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react'
 
 /*
   Redesigned front-end: Minimal, responsive dashboard shell.
