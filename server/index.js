@@ -500,10 +500,33 @@ async function startUserDataStream() {
             }
 
             const totalUnrealizedProfit = positions.reduce((s, p) => s + (Number(p.unrealizedProfit) || 0), 0)
-            const out = { totalWalletBalance, totalUnrealizedProfit, positions }
+
+            // try to extract availableBalance / margin-related fields from balances if present
+            let availableBalance = undefined
+            if (Array.isArray(acct.B)) {
+              const b = acct.B.find(x => (x.a || x.asset || '').toUpperCase() === 'USDT')
+              if (b) {
+                // common keys: wb (walletBalance), cw (crossWalletBalance), ub (availableBalance?)
+                availableBalance = Number(b.ab || b.availableBalance || b.free || b.available || 0) || undefined
+              }
+            }
+
+            // marginBalance: for cross-margin futures, wallet balance + unrealized P/L is a reasonable proxy
+            const marginBalance = Number(totalWalletBalance || 0) + Number(totalUnrealizedProfit || 0)
+
+            const out = { totalWalletBalance, availableBalance, totalUnrealizedProfit, marginBalance, positions }
             latestAccountSnapshot = out
             broadcastAccountUpdate(out)
-            try { broadcastWs({ type: 'acct_delta', totalUnrealizedProfit: out.totalUnrealizedProfit, totalWalletBalance: out.totalWalletBalance, ts: Date.now() }) } catch (e) {}
+            try {
+              broadcastWs({
+                type: 'acct_delta',
+                totalUnrealizedProfit: out.totalUnrealizedProfit,
+                totalWalletBalance: out.totalWalletBalance,
+                availableBalance: out.availableBalance,
+                marginBalance: out.marginBalance,
+                ts: Date.now()
+              })
+            } catch (e) {}
             // broadcast per-position deltas as lightweight messages
             try {
               for (const p of out.positions) {
