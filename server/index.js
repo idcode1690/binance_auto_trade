@@ -297,6 +297,8 @@ app.get('/api/futures/account', async (req, res) => {
   try {
     // If API keys are missing, return a consistent empty snapshot with a warning
     if (!API_KEY || !API_SECRET) {
+      // If we have a cached snapshot (from a previous websocket ACCOUNT_UPDATE), return it
+      if (latestAccountSnapshot) return res.json(latestAccountSnapshot)
       return res.json({
         totalWalletBalance: 0,
         totalUnrealizedProfit: 0,
@@ -305,53 +307,20 @@ app.get('/api/futures/account', async (req, res) => {
       })
     }
 
-    // fetch main account snapshot (includes balances + positions)
-    const data = await signedGet('/fapi/v2/account')
-    // Return essential fields only and parse numeric fields so frontend can consume reliably
-    const out = {
-      totalWalletBalance: typeof data.totalWalletBalance !== 'undefined' ? Number(data.totalWalletBalance) : null,
-      totalUnrealizedProfit: typeof data.totalUnrealizedProfit !== 'undefined' ? Number(data.totalUnrealizedProfit) : null,
-      positions: Array.isArray(data.positions) ? data.positions.map(p => ({
-        symbol: p.symbol,
-        // parsed numeric values (numbers, not strings)
-        positionAmt: Number(p.positionAmt) || 0,
-        entryPrice: Number(p.entryPrice) || 0,
-        unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
-        leverage: p.leverage ? Number(p.leverage) : undefined,
-        marginType: p.marginType || p.marginType || undefined,
-        positionSide: p.positionSide || undefined,
-        // include initial margin and isolated wallet when present so frontend can compute ROI
-        positionInitialMargin: Number(p.positionInitialMargin || p.initialMargin || p.initMargin || 0) || 0,
-        isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsolatedWallet) : undefined)
-      })) : []
+    // IMPORTANT: to avoid hitting Binance REST limits, do not perform a signed REST
+    // fetch here. Instead return the cached `latestAccountSnapshot` (populated from
+    // the user-data websocket ACCOUNT_UPDATE messages). If no snapshot is available
+    // yet, return a 202 status with a friendly message so clients know to wait.
+    if (latestAccountSnapshot) {
+      return res.json(latestAccountSnapshot)
     }
-    // enrich positions with markPrice and fundingRate where possible (cached)
-    try {
-      const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
-      if (syms.length) {
-        const promises = syms.map(async s => {
-          try {
-            const data = await getPremiumIndexForSymbol(s)
-            return { symbol: s, data }
-          } catch (e) { return null }
-        })
-        const results = await Promise.all(promises)
-        const map = new Map()
-        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
-        out.positions = out.positions.map(p => {
-          const info = map.get(p.symbol)
-          if (info) {
-            return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
-          }
-          return p
-        })
-      }
-    } catch (e) {
-      // ignore enrichment errors
-    }
-    // cache latest snapshot for SSE clients
-    latestAccountSnapshot = out
-    res.json(out)
+
+    return res.status(202).json({
+      totalWalletBalance: 0,
+      totalUnrealizedProfit: 0,
+      positions: [],
+      warning: 'No account snapshot available yet. Waiting for user-data websocket ACCOUNT_UPDATE to populate the cache.'
+    })
   } catch (err) {
     // On error, if we have a cached latestAccountSnapshot, return a server-side fallback
     try {
