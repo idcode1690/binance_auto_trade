@@ -656,6 +656,61 @@ app.post('/api/futures/order', async (req, res) => {
   }
 })
 
+// Manual one-time seed of the account snapshot via REST.
+// This exists as an explicit manual action to avoid automatic REST polling.
+app.post('/api/futures/account/seed', async (req, res) => {
+  try {
+    if (!API_KEY || !API_SECRET) return res.status(400).json({ error: 'Missing API key/secret on server' })
+    // If Binance has reported an IP ban recently, refuse to call
+    if (binanceBanUntilMs && binanceBanUntilMs > Date.now()) {
+      return res.status(429).json({ error: 'Binance IP ban active; try later', banUntil: binanceBanUntilMs })
+    }
+
+    // perform a single signed GET to fetch current account snapshot
+    const data = await signedGet('/fapi/v2/account')
+    const out = {
+      totalWalletBalance: typeof data.totalWalletBalance !== 'undefined' ? Number(data.totalWalletBalance) : 0,
+      totalUnrealizedProfit: typeof data.totalUnrealizedProfit !== 'undefined' ? Number(data.totalUnrealizedProfit) : 0,
+      positions: Array.isArray(data.positions) ? data.positions.map(p => ({
+        symbol: p.symbol,
+        positionAmt: Number(p.positionAmt) || 0,
+        entryPrice: Number(p.entryPrice) || 0,
+        unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
+        leverage: p.leverage ? Number(p.leverage) : undefined,
+        marginType: p.marginType || undefined,
+        positionInitialMargin: Number(p.positionInitialMargin || p.initialMargin || p.initMargin || 0) || 0,
+        isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
+      })) : []
+    }
+
+    // enrich with premiumIndex for markPrice/funding
+    try {
+      const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
+      if (syms.length) {
+        const promises = syms.map(async s => {
+          try { const d = await getPremiumIndexForSymbol(s); return { symbol: s, data: d } } catch (e) { return null }
+        })
+        const results = await Promise.all(promises)
+        const map = new Map()
+        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
+        out.positions = out.positions.map(p => {
+          const info = map.get(p.symbol)
+          if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
+          return p
+        })
+      }
+    } catch (e) {}
+
+    latestAccountSnapshot = out
+    // broadcast to SSE/WS clients
+    try { broadcastAccountUpdate(out); broadcastWs({ type: 'snapshot', account: out, ts: Date.now() }) } catch (e) {}
+    res.json({ ok: true, seeded: true, snapshot: out })
+  } catch (err) {
+    console.error('account seed error', err && (err.response ? err.response.data : err.message))
+    res.status(500).json({ error: String(err && err.message), details: err && err.response ? err.response.data : undefined })
+  }
+})
+
 // create HTTP server so we can attach a websocket server to the same port
 const http = require('http')
 const server = http.createServer(app)
