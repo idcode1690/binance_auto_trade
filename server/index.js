@@ -494,6 +494,20 @@ async function startUserDataStream() {
         // update our cached snapshot without issuing a REST call. ORDER_TRADE_UPDATE
         // messages are forwarded to clients.
         if (evt === 'ACCOUNT_UPDATE') {
+          // If we don't yet have a cached full snapshot, attempt a one-time safe REST seed
+          // to enrich fields that ACCOUNT_UPDATE does not provide (leverage/marginType/etc).
+          try {
+            if (!latestAccountSnapshot && API_KEY && !userData.autoSeedDone) {
+              userData.autoSeedDone = true
+              (async () => {
+                try {
+                  await seedAccountSnapshot()
+                } catch (e) {
+                  console.warn('fallback seed failed', e && (e.response ? e.response.data : e.message))
+                }
+              })()
+            }
+          } catch (e) {}
           try {
             const acct = (data.a || data.data || data) // 'a' contains ACCOUNT_UPDATE payload
             // Extract positions (Binance uses P array for positions)
