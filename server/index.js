@@ -385,6 +385,21 @@ app.get('/api/debug/market', (req, res) => {
   }
 })
 
+// debug endpoint for user-data (listenKey) status
+app.get('/api/debug/userdata', (req, res) => {
+  try {
+    res.json({
+      listenKey: userData && userData.listenKey ? String(userData.listenKey) : null,
+      wsActive: !!(userData && userData.ws),
+      keepaliveRunning: !!(userData && userData.keepaliveInterval),
+      reconnectBackoffMs: userData && userData.reconnectBackoffMs ? userData.reconnectBackoffMs : null,
+      latestSnapshotExists: !!latestAccountSnapshot
+    })
+  } catch (e) {
+    res.status(500).json({ error: String(e && e.message) })
+  }
+})
+
 // SSE endpoint for pushing account/position updates
 app.get('/api/futures/sse', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
