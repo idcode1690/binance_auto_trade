@@ -353,6 +353,10 @@ export default function App() {
 
             
 
+            </div>
+          </div>
+        </section>
+
         <section className="positions card">
           <div style={{padding:12}}>
             <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Open Positions</div>
