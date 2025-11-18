@@ -361,50 +361,11 @@ export default function App() {
     }
   }, [symbol])
 
-  // Polling fallback: if WS updates are stale, fetch a fresh account snapshot periodically
-  useEffect(() => {
-    let pollTimer = null
-    let mounted = true
-
-    const fetchSnapshot = async () => {
-      try {
-        const resp = await fetch('/api/futures/account')
-        if (!resp || resp.status !== 200) return
-        const data = await resp.json()
-        if (!mounted) return
-        if (data) {
-          setAccount(data)
-          try { console.debug('[SNAPSHOT] positions', Array.isArray(data.positions) ? data.positions.map(p => p && p.symbol) : data.positions) } catch(e){}
-          // if snapshot includes a markPrice for our selected symbol, update live price
-          try {
-            if (Array.isArray(data.positions)) {
-              const p = data.positions.find(pp => normalizeSym(pp.symbol) === normalizeSym(symbol))
-              if (p && typeof p.markPrice !== 'undefined' && p.markPrice !== null) setLastPrice(Number(p.markPrice))
-            }
-          } catch (e) {}
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    const start = () => {
-      // run an immediate fetch so UI gets synced on mount
-      fetchSnapshot().catch(() => {})
-      // run every 3000ms to keep UI snappy
-      pollTimer = setInterval(() => {
-        try {
-          const last = lastWsAt ? Date.parse(lastWsAt) : 0
-          const age = Date.now() - last
-          // if no ws update in last 3s, fetch snapshot
-          if (!lastWsAt || age > 3000) fetchSnapshot()
-        } catch (e) {}
-      }, 3000)
-    }
-
-    start()
-    return () => { mounted = false; if (pollTimer) clearInterval(pollTimer) }
-  }, [symbol, lastWsAt])
+  // REST polling removed: client will now rely exclusively on WebSocket
+  // account/pos deltas and server-sent 'snapshot' messages. This avoids
+  // triggering Binance REST rate limits and IP bans. If a fresh full
+  // snapshot is required, the server should emit a 'snapshot' message
+  // over the existing WebSocket stream.
 
   return (
     <div className="container body-root">
