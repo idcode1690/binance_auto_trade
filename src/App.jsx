@@ -271,14 +271,22 @@ export default function App() {
               const sym = String(pos.symbol).toUpperCase()
               acc.positions = Array.isArray(acc.positions) ? acc.positions.slice() : []
               const idx = acc.positions.findIndex(p => String(p.symbol).toUpperCase() === sym)
+              const amtNum = Number(pos.positionAmt) || 0
               if (idx >= 0) {
-                acc.positions[idx] = { ...acc.positions[idx], ...pos }
+                if (Math.abs(amtNum) === 0) {
+                  // position closed/flattened -> remove it immediately
+                  acc.positions.splice(idx, 1)
+                } else {
+                  acc.positions[idx] = { ...acc.positions[idx], ...pos }
+                }
               } else {
-                acc.positions.push({ ...pos })
+                if (Math.abs(amtNum) !== 0) {
+                  acc.positions.push({ ...pos })
+                }
               }
-              // if this is the currently selected symbol, persist holdings
+              // if this is the currently selected symbol, persist holdings (store '0' when closed)
               if (sym === String(symbol).toUpperCase()) {
-                try { const amt = String(Number(pos.positionAmt) || 0); localStorage.setItem('holdings', amt); setHoldingsStr(amt) } catch (e) {}
+                try { const amt = String(amtNum || 0); localStorage.setItem('holdings', amt); setHoldingsStr(amt) } catch (e) {}
               }
               return acc
             })
