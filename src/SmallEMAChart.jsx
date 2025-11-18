@@ -202,12 +202,14 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   }, [livePrice])
   const width = 600
   // default height increased for better visibility; zoom toggles larger view
-  const [expanded, setExpanded] = useState(false)
+  // start expanded so the initial chart loads in a zoomed-in state
+  const [expanded, setExpanded] = useState(true)
   const height = expanded ? 380 : 220
   const padding = 2
   const points = klines.length
   // viewCount: number of candles visible (user-controlled via mouse wheel)
-  const [viewCount, setViewCount] = useState(120)
+  // default fewer visible candles to present a more-zoomed initial view
+  const [viewCount, setViewCount] = useState(80)
   const minView = 10
   const maxView = Math.max(minView, limit)
 
