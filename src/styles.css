@@ -298,3 +298,30 @@ body {
 .pnl-cell .pnl-percent { font-size:12px; font-weight:600 }
 .pnl-pos { color: var(--success) }
 .pnl-neg { color: var(--danger) }
+
+/* Layout fixes: prevent sidebar / cards from overflowing horizontally
+   - Ensure flex/grid children can shrink (min-width:0)
+   - Allow long content to wrap or be clipped with ellipsis
+   - Make positions table horizontally scrollable when necessary */
+.container, .main-grid, .main-chart, .sidebar, .card { box-sizing: border-box; min-width: 0 }
+.sidebar .sidebar-inner { display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.sidebar h3 { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.sidebar .meta { overflow: hidden; max-width: 100%; word-break: break-word; overflow-wrap: anywhere; min-width: 0 }
+.sidebar .tabs-row .tab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.alerts .alert-item, .orders-list .alert-item { word-break: break-word; overflow-wrap: anywhere }
+.wide-toggle .side { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+
+/* Positions table: allow internal horizontal scroll on small widths and ensure cells can shrink */
+.positions-table { width: 100%; max-width: 100%; overflow: auto; -webkit-overflow-scrolling: touch }
+.positions-table > div { min-width: 0 }
+.positions-table [style] { min-width: 0 }
+.positions-table .pnl-cell, .positions-table .pnl-amount, .positions-table .pnl-percent { min-width: 0 }
+
+/* Make sure inline-styled flex children don't force the sidebar wider */
+.sidebar * { min-width: 0 }
+
+@media (max-width: 1100px) {
+  /* keep sidebar from forcing horizontal scroll on medium screens */
+  .main-grid { grid-template-columns: 1fr; }
+  .sidebar { width: 100%; }
+}

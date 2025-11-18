@@ -251,19 +251,42 @@ export default function App() {
 
     // expose SSE status in the UI (simple indicator)
     const SseIndicator = () => (
-      <div style={{ fontSize: 12, marginLeft: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ opacity: 0.7 }}>SSE:</span>
-          <span style={{ fontWeight: 600, color: sseStatus === 'connected' ? '#16a34a' : sseStatus === 'error' ? '#dc2626' : '#666' }}>{sseStatus}</span>
-          {lastSseAt ? <span style={{ marginLeft: 6, opacity: 0.7 }}>last {new Date(lastSseAt).toLocaleTimeString()}</span> : null}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginLeft: 8 }}>
+        <ConnectionBadge label="SSE" status={sseStatus} ts={lastSseAt} />
+        <ConnectionBadge label="WS" status={wsStatus} ts={lastWsAt} />
+      </div>
+    )
+
+  function ConnectionBadge({ label, status, ts }) {
+      const color = status === 'connected' ? '#16a34a' : status === 'error' ? '#dc2626' : '#666'
+      return (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, minWidth: 0 }}>
+          <span style={{ opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}:</span>
+          <span style={{ fontWeight: 700, color }}>{status}</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ opacity: 0.7 }}>WS:</span>
-          <span style={{ fontWeight: 600, color: wsStatus === 'connected' ? '#16a34a' : wsStatus === 'error' ? '#dc2626' : '#666' }}>{wsStatus}</span>
-          {lastWsAt ? <span style={{ marginLeft: 6, opacity: 0.7 }}>last {new Date(lastWsAt).toLocaleTimeString()}</span> : null}
+      )
+  }
+
+  function AccountSummary({ account }) {
+    const bal = account && typeof account.totalWalletBalance !== 'undefined' ? Number(account.totalWalletBalance) : Number(futuresBalanceStr || 0)
+    const upl = account && typeof account.totalUnrealizedProfit !== 'undefined' ? Number(account.totalUnrealizedProfit) : 0
+    const uplPos = upl >= 0
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ fontSize: 13, color: '#444', fontWeight: 600 }}>Futures USDT Balance</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{formatPrice(bal)}</div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: '#666' }}>Binance Futures wallet</div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: uplPos ? '#064e3b' : '#7f1d1d' }}>{upl >= 0 ? '+' : ''}{formatPrice(upl)} USDT</div>
+            <div style={{ fontSize: 11, color: '#777' }}>Unrealized P/L</div>
+          </div>
         </div>
       </div>
     )
+  }
 
   const wsRef = useRef(null)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
@@ -533,19 +556,7 @@ export default function App() {
               <SseIndicator />
             </div>
             <div className="meta">
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:600}}>Futures USDT Balance</div>
-                    <div style={{fontSize:12,color:'var(--muted)'}}>{account && typeof account.totalWalletBalance !== 'undefined' ? 'Binance Futures wallet (from API)' : 'Binance Futures wallet (not connected)'}</div>
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:16,fontWeight:600}}>{account && typeof account.totalWalletBalance !== 'undefined' ? formatPrice(Number(account.totalWalletBalance)) : formatPrice(Number(futuresBalanceStr || 0))}</div>
-                    <div style={{fontSize:13}}>{account && typeof account.totalUnrealizedProfit !== 'undefined' ? `Unrealized P/L: ${formatPrice(Number(account.totalUnrealizedProfit))} USDT` : ''}</div>
-                  </div>
-                </div>
-              </div>
-              {/* Test Order removed */}
+              <AccountSummary account={account} />
             </div>
 
             <div style={{marginTop:12}}>
