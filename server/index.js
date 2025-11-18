@@ -689,6 +689,24 @@ async function startUserDataStream() {
 // start the user-data stream if we have keys
 startUserDataStream()
 
+// Attempt a one-time REST seed at server startup if API keys are configured
+// and no snapshot has been populated by the user-data stream yet. This keeps
+// the client-side purely websocket-driven while ensuring the server can
+// provide an initial authoritative snapshot quickly when available.
+(async () => {
+  try {
+    if (API_KEY && API_SECRET && !latestAccountSnapshot) {
+      try {
+        console.info('Performing initial account seed at startup')
+        const snap = await seedAccountSnapshot()
+        if (snap) console.info('Initial account snapshot seeded')
+      } catch (e) {
+        console.warn('Initial account seed failed or skipped:', e && (e.response ? e.response.data : e.message))
+      }
+    }
+  } catch (e) {}
+})()
+
 app.post('/api/futures/order', async (req, res) => {
   try {
     const { symbol, side, type, quantity, price, reduceOnly, positionSide } = req.body || {}
@@ -931,31 +949,10 @@ function startWss() {
   wss = new WebSocketServer({ server, path: '/ws/account' })
   wss.on('connection', (socket, req) => {
     console.log('ws client connected for account deltas')
-    // On first client connect, if we don't yet have a full snapshot and
-    // API keys are available, perform a one-time safe REST seed so clients
-    // immediately receive authoritative account data. Guard with
-    // `userData.autoSeedDone` to avoid repeated REST calls.
-    (async () => {
-      try {
-        if (!latestAccountSnapshot && API_KEY && !userData.autoSeedDone) {
-          userData.autoSeedDone = true
-          try {
-            const snap = await seedAccountSnapshot()
-            if (snap) {
-              try { socket.send(JSON.stringify({ type: 'snapshot', account: snap })) } catch (e) {}
-            }
-          } catch (e) {
-            console.warn('seedAccountSnapshot on ws connect failed', e && (e.response ? e.response.data : e.message))
-            // fall back to sending cached snapshot (if any)
-            try { if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot })) } catch (e) {}
-          }
-        } else {
-          // send existing snapshot if available
-          try { if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot })) } catch (e) {}
-        }
-      } catch (e) {}
-    })()
-
+    // optional: send current snapshot as authoritative on connect
+    try {
+      if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot }))
+    } catch (e) {}
     socket.on('close', () => { /* client disconnected */ })
   })
 }

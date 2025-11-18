@@ -52,7 +52,6 @@ export default function App() {
     try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
   })
   const [account, setAccount] = useState(null)
-  const [seedLoading, setSeedLoading] = useState(false)
   const [wsStatus, setWsStatus] = useState('disconnected')
   const [lastWsAt, setLastWsAt] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
@@ -217,7 +216,8 @@ export default function App() {
   }
 
   const wsRef = useRef(null)
-  const [initialLoaded, setInitialLoaded] = useState(false)
+  // connect immediately via websocket-only flow (no REST-first)
+  const [initialLoaded] = useState(true)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
@@ -270,17 +270,7 @@ export default function App() {
           if (!msg) return
           // handle positional delta
           if (msg.type === 'pos_delta') {
-            const pos = msg.position || msg.pos || msg.data || (msg.symbol ? {
-              symbol: msg.symbol,
-              positionAmt: msg.positionAmt,
-              entryPrice: msg.entryPrice,
-              markPrice: msg.markPrice,
-              unrealizedProfit: msg.unrealizedProfit,
-              leverage: msg.leverage,
-              positionInitialMargin: msg.positionInitialMargin,
-              marginType: msg.marginType,
-              isolatedWallet: msg.isolatedWallet
-            } : null)
+            const pos = msg.position || msg.pos || msg.data
             if (!pos || !pos.symbol) return
             // if the delta includes a markPrice, update live lastPrice for UI
             if (typeof pos.markPrice !== 'undefined' && pos.markPrice !== null) {
@@ -377,48 +367,9 @@ export default function App() {
     }
   }, [symbol, initialLoaded])
 
-  // On mount: attempt a single REST GET to `/api/futures/account` to seed initial data
-  // If no cached snapshot is available, request the manual seed endpoint once.
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const resp = await fetch('/api/futures/account')
-        if (!mounted) return
-        if (resp.status === 202) {
-          // no snapshot yet — try a one-time seed (server-side protects against rate limits)
-          try {
-            const seedResp = await fetch('/api/futures/account/seed', { method: 'POST' })
-            if (!mounted) return
-            if (seedResp.ok) {
-              const j = await seedResp.json()
-              if (j && j.snapshot) {
-                try { setAccount(j.snapshot); if (j.snapshot.totalWalletBalance) { localStorage.setItem('futuresBalance', String(j.snapshot.totalWalletBalance)); setFuturesBalanceStr(String(j.snapshot.totalWalletBalance)) } } catch (e) {}
-              }
-            }
-          } catch (e) {
-            // ignore seed errors — server may be rate-limited or keys may be missing
-            console.warn('seed attempt failed', e && e.message)
-          }
-        } else if (resp.ok) {
-          try {
-            const j = await resp.json()
-            if (!mounted) return
-            if (j) {
-              setAccount(j)
-              if (j.totalWalletBalance) { try { localStorage.setItem('futuresBalance', String(j.totalWalletBalance)); setFuturesBalanceStr(String(j.totalWalletBalance)) } catch (e) {} }
-            }
-          } catch (e) {}
-        }
-        // mark initial load attempt complete so WS can connect
-        try { setInitialLoaded(true) } catch (e) {}
-      } catch (e) {
-        console.warn('initial account fetch failed', e && e.message)
-        try { setInitialLoaded(true) } catch (e2) {}
-      }
-    })()
-    return () => { mounted = false }
-  }, [])
+
+  // No REST initial fetch: client relies solely on server WebSocket messages
+  // (`snapshot`, `pos_delta`, `acct_delta`) to populate account data.
 
   // REST polling removed: client will now rely exclusively on WebSocket
   // account/pos deltas and server-sent 'snapshot' messages. This avoids
@@ -515,14 +466,8 @@ export default function App() {
                           const indexPrice = Number(p.indexPrice) || 0
                           const indexUsed = indexPrice || mark
                           const computedUplIndex = (indexUsed - entry) * amt
-                          // prefer authoritative server-provided unrealizedProfit, then client-side
-                          // display-only value (`displayUnrealizedProfit`) for snappy updates,
-                          // finally fall back to locally computed upl using mark/entry.
-                          const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null)
-                            ? Number(p.unrealizedProfit)
-                            : (typeof p.displayUnrealizedProfit !== 'undefined' && p.displayUnrealizedProfit !== null)
-                              ? Number(p.displayUnrealizedProfit)
-                              : computedUpl
+                          // prefer explicit server-provided unrealizedProfit if present
+                          const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : computedUpl
 
                           // prefer explicit initial margin fields when available
                           const initMargin = Number(p.positionInitialMargin || p.initialMargin || 0) || 0
@@ -601,30 +546,7 @@ export default function App() {
               <h3 style={{marginTop:0, marginBottom:0}}>Futures Account</h3>
             </div>
             <div className="meta">
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
-                <AccountSummary account={derivedAccount || account} />
-                <div style={{marginLeft:8}}>
-                  <button className="theme-btn" onClick={async () => {
-                    try {
-                      setSeedLoading(true)
-                      const resp = await fetch('/api/futures/account/seed', { method: 'POST' })
-                      if (resp.ok) {
-                        const j = await resp.json()
-                        const snap = j && (j.snapshot || j.account || j)
-                        if (snap) {
-                          try { setAccount(snap); if (snap.totalWalletBalance) { localStorage.setItem('futuresBalance', String(snap.totalWalletBalance)); setFuturesBalanceStr(String(snap.totalWalletBalance)) } } catch (e) {}
-                        }
-                      } else {
-                        try { const txt = await resp.text(); console.warn('seed failed', resp.status, txt) } catch (e) {}
-                      }
-                    } catch (e) {
-                      console.warn('seed request failed', e && e.message)
-                    } finally { setSeedLoading(false) }
-                  }} disabled={seedLoading} title="서버에서 계정 스냅샷을 한 번 가져옵니다">
-                    {seedLoading ? '가져오는 중…' : '계정 가져오기'}
-                  </button>
-                </div>
-              </div>
+              <AccountSummary account={derivedAccount || account} />
             </div>
             
 
