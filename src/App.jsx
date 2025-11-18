@@ -272,16 +272,16 @@ export default function App() {
     const upl = account && typeof account.totalUnrealizedProfit !== 'undefined' ? Number(account.totalUnrealizedProfit) : 0
     const uplPos = upl >= 0
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <div style={{ fontSize: 13, color: '#444', fontWeight: 600 }}>Futures USDT Balance</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{formatPrice(bal)}</div>
+      <div className="account-card">
+        <div className="account-row account-top">
+          <div className="account-title">Futures USDT Balance</div>
+          <div className="account-balance">{formatPrice(bal)}</div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 12, color: '#666' }}>Binance Futures wallet</div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: uplPos ? '#064e3b' : '#7f1d1d' }}>{upl >= 0 ? '+' : ''}{formatPrice(upl)} USDT</div>
-            <div style={{ fontSize: 11, color: '#777' }}>Unrealized P/L</div>
+        <div className="account-row account-bottom">
+          <div className="account-sub">Binance Futures wallet</div>
+          <div className="account-upl">
+            <div className={"upl-amount " + (uplPos ? 'pos' : 'neg')}>{upl >= 0 ? '+' : ''}{formatPrice(upl)} USDT</div>
+            <div className="upl-label">Unrealized P/L</div>
           </div>
         </div>
       </div>
