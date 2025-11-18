@@ -52,6 +52,7 @@ export default function App() {
     try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
   })
   const [account, setAccount] = useState(null)
+  const [seedLoading, setSeedLoading] = useState(false)
   const [wsStatus, setWsStatus] = useState('disconnected')
   const [lastWsAt, setLastWsAt] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
@@ -600,7 +601,30 @@ export default function App() {
               <h3 style={{marginTop:0, marginBottom:0}}>Futures Account</h3>
             </div>
             <div className="meta">
-              <AccountSummary account={derivedAccount || account} />
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                <AccountSummary account={derivedAccount || account} />
+                <div style={{marginLeft:8}}>
+                  <button className="theme-btn" onClick={async () => {
+                    try {
+                      setSeedLoading(true)
+                      const resp = await fetch('/api/futures/account/seed', { method: 'POST' })
+                      if (resp.ok) {
+                        const j = await resp.json()
+                        const snap = j && (j.snapshot || j.account || j)
+                        if (snap) {
+                          try { setAccount(snap); if (snap.totalWalletBalance) { localStorage.setItem('futuresBalance', String(snap.totalWalletBalance)); setFuturesBalanceStr(String(snap.totalWalletBalance)) } } catch (e) {}
+                        }
+                      } else {
+                        try { const txt = await resp.text(); console.warn('seed failed', resp.status, txt) } catch (e) {}
+                      }
+                    } catch (e) {
+                      console.warn('seed request failed', e && e.message)
+                    } finally { setSeedLoading(false) }
+                  }} disabled={seedLoading} title="서버에서 계정 스냅샷을 한 번 가져옵니다">
+                    {seedLoading ? '가져오는 중…' : '계정 가져오기'}
+                  </button>
+                </div>
+              </div>
             </div>
             
 
