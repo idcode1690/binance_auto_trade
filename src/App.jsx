@@ -351,53 +351,7 @@ export default function App() {
               </div>
             </div>
 
-              {/* Positions moved to a separate section below */}
-                          const upl = Number(p.unrealizedProfit) || 0
-                          const initMargin = Number(p.positionInitialMargin || 0) || 0
-                          const lev = p.leverage ? Number(p.leverage) : undefined
-                          const side = amt > 0 ? 'LONG' : 'SHORT'
-                          const notional = (Math.abs(amt) * entry) || 0
-                          let roiPct = null
-                          if (initMargin && initMargin > 0) {
-                            roiPct = (upl / initMargin) * 100
-                          } else if (lev && entry && Math.abs(amt) > 0) {
-                            const usedMargin = notional / lev
-                            if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
-                          }
-                          const isPos = upl >= 0
-                          const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
-                          return (
-                            <div key={p.symbol} style={{display:'flex',gap:12,padding:'8px 6px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
-                              <div style={{flex:1.2}}>{p.symbol}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
-                              <div style={{flex:1.2,textAlign:'right'}}>
-                                {initMargin ? (
-                                  <div>
-                                    <div style={{fontWeight:400}}>{initMargin.toFixed(4)} USDT</div>
-                                    <div style={{fontSize:12,color:'var(--muted)'}}>{notional ? `(${((initMargin / notional)*100).toFixed(2)}%)` : '(—)'}</div>
-                                  </div>
-                                ) : '—'}
-                              </div>
-                              <div className={"pnl-cell " + pnlClass} style={{flex:1,textAlign:'right'}}>
-                                <div className="pnl-amount">{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</div>
-                                <div className="pnl-percent">{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
-                              </div>
-                              <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })()
-                ) : (
-                  <div style={{fontSize:12,color:'var(--muted)'}}>Positions not available</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
+            
 
         <section className="positions card">
           <div style={{padding:12}}>
