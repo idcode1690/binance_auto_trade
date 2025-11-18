@@ -54,6 +54,7 @@ function updateMarketSubscriptionsFromSnapshot(snapshot) {
     }
 
     marketSubscribedSymbols = symbols
+    console.info('subscribing markPrice streams ->', streams)
     marketWs = new WebSocketClient(url)
 
     marketWs.on('open', () => {
@@ -254,6 +255,20 @@ app.get('/api/config', (req, res) => {
     futuresApiBase: FUTURES_API_BASE,
     futuresWsBase: FUTURES_WS_BASE
   })
+})
+
+// debug endpoint to inspect market ws subscription status
+app.get('/api/debug/market', (req, res) => {
+  try {
+    res.json({
+      marketSubscribedSymbols,
+      marketWsActive: !!marketWs,
+      latestSnapshotExists: !!latestAccountSnapshot,
+      latestSnapshotUpdatedAt: latestAccountSnapshot ? new Date().toISOString() : null
+    })
+  } catch (e) {
+    res.status(500).json({ error: String(e && e.message) })
+  }
 })
 
 // SSE endpoint for pushing account/position updates
