@@ -328,6 +328,7 @@ export default function App() {
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
               <h3 style={{marginTop:0, marginBottom:0}}>Futures Account</h3>
+              <SseIndicator />
             </div>
             <div className="meta">
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
