@@ -389,6 +389,23 @@ app.get('/api/debug/market', (req, res) => {
   }
 })
 
+// debug endpoint for websocket connections
+app.get('/api/debug/wss', (req, res) => {
+  try {
+    if (!wss) return res.json({ active: false, clients: 0 })
+    const clients = Array.from(wss.clients || []).filter(c => c && c.readyState === c.OPEN)
+    const info = clients.map((c) => {
+      try {
+        const sock = c._socket || {}
+        return { remoteAddress: sock.remoteAddress || null, remotePort: sock.remotePort || null }
+      } catch (e) { return {} }
+    })
+    return res.json({ active: true, clients: info.length, list: info })
+  } catch (e) {
+    return res.status(500).json({ error: String(e && e.message) })
+  }
+})
+
 // debug endpoint for user-data (listenKey) status
 app.get('/api/debug/userdata', (req, res) => {
   try {
