@@ -269,7 +269,17 @@ export default function App() {
           if (!msg) return
           // handle positional delta
           if (msg.type === 'pos_delta') {
-            const pos = msg.position || msg.pos || msg.data
+            const pos = msg.position || msg.pos || msg.data || (msg.symbol ? {
+              symbol: msg.symbol,
+              positionAmt: msg.positionAmt,
+              entryPrice: msg.entryPrice,
+              markPrice: msg.markPrice,
+              unrealizedProfit: msg.unrealizedProfit,
+              leverage: msg.leverage,
+              positionInitialMargin: msg.positionInitialMargin,
+              marginType: msg.marginType,
+              isolatedWallet: msg.isolatedWallet
+            } : null)
             if (!pos || !pos.symbol) return
             // if the delta includes a markPrice, update live lastPrice for UI
             if (typeof pos.markPrice !== 'undefined' && pos.markPrice !== null) {
@@ -504,8 +514,14 @@ export default function App() {
                           const indexPrice = Number(p.indexPrice) || 0
                           const indexUsed = indexPrice || mark
                           const computedUplIndex = (indexUsed - entry) * amt
-                          // prefer explicit server-provided unrealizedProfit if present
-                          const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : computedUpl
+                          // prefer authoritative server-provided unrealizedProfit, then client-side
+                          // display-only value (`displayUnrealizedProfit`) for snappy updates,
+                          // finally fall back to locally computed upl using mark/entry.
+                          const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null)
+                            ? Number(p.unrealizedProfit)
+                            : (typeof p.displayUnrealizedProfit !== 'undefined' && p.displayUnrealizedProfit !== null)
+                              ? Number(p.displayUnrealizedProfit)
+                              : computedUpl
 
                           // prefer explicit initial margin fields when available
                           const initMargin = Number(p.positionInitialMargin || p.initialMargin || 0) || 0
