@@ -351,72 +351,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* small EMA chart under the price
-                Render behind a user toggle and React.Suspense so we can
-                enable it step-by-step and capture any initialization errors. */}
-            <div style={{marginTop: 8}}>
-              <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
-                <label style={{fontSize:13,color:'var(--muted)'}}>Symbol:</label>
-                <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => { const s = (symbolStr||'BTCUSDT').trim().toUpperCase(); setSymbolStr(s); try{ localStorage.setItem('symbol', s) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
-                <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
-                <input className="theme-input" type="number" min={1} value={emaShortStr} onChange={e=>setEmaShortStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(emaShortStr,10) || 26)); setEmaShortStr(v); try{ localStorage.setItem('emaShort', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
-                <label style={{fontSize:13,color:'var(--muted)'}}>EMA2:</label>
-                <input className="theme-input" type="number" min={1} value={emaLongStr} onChange={e=>setEmaLongStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(emaLongStr,10) || 200)); setEmaLongStr(v); try{ localStorage.setItem('emaLong', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
-                <label style={{fontSize:13,color:'var(--muted)'}}>Minutes:</label>
-                <input className="theme-input" type="number" min={1} value={minutesStr} onChange={e=>setMinutesStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(minutesStr,10) || 1)); setMinutesStr(v); try{ localStorage.setItem('minutes', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
-              </div>
-              <ChartToggle
-                livePrice={lastPrice}
-                onTrade={setLastPrice}
-                onCross={(c) => {
-                  // add cross alert
-                  setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 200))
-                  try {
-                    // create a simulated order entry on cross so right column shows it
-                    const side = c.type === 'bull' ? 'BUY' : 'SELL'
-                    const usdt = 100 // default simulated USDT allocation
-                    const priceNum = Number(c.price) || Number(lastPrice) || 0
-                    let qty = 0
-                    if (priceNum > 0) qty = Math.floor((usdt / priceNum) * 1e6) / 1e6
-                    const orderEntry = {
-                      id: Date.now(),
-                      symbol: String(symbol || 'BTCUSDT'),
-                      side,
-                      quantity: qty > 0 ? String(qty) : '0',
-                      usdt,
-                      time: c.time || Date.now(),
-                      status: 'simulated',
-                      source: 'cross'
-                    }
-                    setOrders(prev => { const next = [orderEntry, ...prev].slice(0, 200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
-                  } catch (e) {}
-                }}
-                emaShort={emaShort}
-                emaLong={emaLong}
-                minutes={minutes}
-                symbol={symbol}
-              />
-              {/* Positions table under chart */}
-              <div style={{marginTop:12}}>
-                <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Open Positions</div>
-                {derivedAccount && Array.isArray(derivedAccount.positions) ? (
-                  (() => {
-                    const open = derivedAccount.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
-                    if (!open.length) return (<div style={{fontSize:12,color:'var(--muted)'}}>No open positions</div>)
-                    return (
-                      <div className="positions-table" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,overflow:'hidden'}}>
-                        <div style={{display:'flex',gap:12,padding:'8px 6px',background:'rgba(0,0,0,0.02)',fontSize:12,fontWeight:700}}>
-                          <div style={{flex:1.2}}>Symbol</div>
-                          <div style={{flex:1,textAlign:'right'}}>Lev</div>
-                          <div style={{flex:1,textAlign:'right'}}>Size</div>
-                          <div style={{flex:1,textAlign:'right'}}>Entry Price</div>
-                          <div style={{flex:1.2,textAlign:'right'}}>Margin</div>
-                          <div style={{flex:1,textAlign:'right'}}>PNL (ROI %)</div>
-                          <div style={{flex:1,textAlign:'right'}}>Margin Type</div>
-                        </div>
-                        {open.map(p => {
-                          const amt = Number(p.positionAmt) || 0
-                          const entry = Number(p.entryPrice) || 0
+              {/* Positions moved to a separate section below */}
                           const upl = Number(p.unrealizedProfit) || 0
                           const initMargin = Number(p.positionInitialMargin || 0) || 0
                           const lev = p.leverage ? Number(p.leverage) : undefined
@@ -460,6 +395,78 @@ export default function App() {
                   <div style={{fontSize:12,color:'var(--muted)'}}>Positions not available</div>
                 )}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="positions card">
+          <div style={{padding:12}}>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Open Positions</div>
+            <div style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,padding:12,background:'transparent'}}>
+              {derivedAccount && Array.isArray(derivedAccount.positions) ? (
+                (() => {
+                  const open = derivedAccount.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
+                  if (!open.length) return (
+                    <div style={{padding:24,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)'}}>No open positions</div>
+                  )
+                  return (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:12}}>
+                      {open.map(p => {
+                        const amt = Number(p.positionAmt) || 0
+                        const entry = Number(p.entryPrice) || 0
+                        const upl = Number(p.unrealizedProfit) || 0
+                        const initMargin = Number(p.positionInitialMargin || 0) || 0
+                        const lev = p.leverage ? Number(p.leverage) : undefined
+                        const side = amt > 0 ? 'LONG' : 'SHORT'
+                        const notional = (Math.abs(amt) * entry) || 0
+                        let roiPct = null
+                        if (initMargin && initMargin > 0) {
+                          roiPct = (upl / initMargin) * 100
+                        } else if (lev && entry && Math.abs(amt) > 0) {
+                          const usedMargin = notional / lev
+                          if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
+                        }
+                        const isPos = upl >= 0
+                        const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
+                        return (
+                          <div key={p.symbol + String(p.positionAmt)} className="position-card" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:8,padding:12,minWidth:260,flex:'1 0 320px',boxShadow:'0 1px 2px rgba(0,0,0,0.02)',background:'#fff'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                              <div style={{fontWeight:700}}>{p.symbol}</div>
+                              <div style={{fontSize:12,color:'var(--muted)'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? 'Isolated' : 'Cross') : 'Cross'}</div>
+                            </div>
+                            <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>Side</div>
+                                <div style={{fontWeight:700}}>{side} {Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
+                              </div>
+                              <div style={{flex:1,textAlign:'right'}}>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>Entry</div>
+                                <div>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                              </div>
+                            </div>
+                            <div style={{display:'flex',justifyContent:'space-between',marginTop:10,alignItems:'center'}}>
+                              <div>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>Leverage</div>
+                                <div>{lev || '—'}</div>
+                              </div>
+                              <div style={{textAlign:'right'}}>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>Margin</div>
+                                <div>{initMargin ? `${initMargin.toFixed(4)} USDT` : '—'}</div>
+                              </div>
+                              <div style={{textAlign:'right'}}>
+                                <div style={{fontSize:12,color:'var(--muted)'}}>PNL</div>
+                                <div className={pnlClass} style={{fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT {roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : ''}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()
+              ) : (
+                <div style={{padding:12,fontSize:12,color:'var(--muted)'}}>Positions not available</div>
+              )}
             </div>
           </div>
         </section>
