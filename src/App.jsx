@@ -263,6 +263,12 @@ export default function App() {
           if (msg.type === 'pos_delta') {
             const pos = msg.position || msg.pos || msg.data
             if (!pos || !pos.symbol) return
+            // if the delta includes a markPrice, update live lastPrice for UI
+            if (typeof pos.markPrice !== 'undefined' && pos.markPrice !== null) {
+              try { setLastPrice(Number(pos.markPrice)) } catch (e) {}
+            } else if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null) {
+              try { setLastPrice(Number(msg.markPrice)) } catch (e) {}
+            }
             setAccount(prev => {
               const acc = prev ? { ...prev } : { positions: [] }
               const sym = String(pos.symbol).toUpperCase()
@@ -281,6 +287,10 @@ export default function App() {
             })
           } else if (msg.type === 'acct_delta') {
             const totals = msg.totals || msg.data || {}
+            // if acct_delta carries a markPrice for our symbol, update lastPrice
+            if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null) {
+              try { setLastPrice(Number(msg.markPrice)) } catch (e) {}
+            }
             setAccount(prev => {
               const acc = prev ? { ...prev } : { positions: [] }
               if (typeof totals.totalUnrealizedProfit !== 'undefined') acc.totalUnrealizedProfit = totals.totalUnrealizedProfit
@@ -339,6 +349,46 @@ export default function App() {
       wsRef.current = null
     }
   }, [symbol])
+
+  // Polling fallback: if WS updates are stale, fetch a fresh account snapshot periodically
+  useEffect(() => {
+    let pollTimer = null
+    const fetchSnapshot = async () => {
+      try {
+        const resp = await fetch('/api/futures/account')
+        if (!resp || resp.status !== 200) return
+        const data = await resp.json()
+        if (!mounted) return
+        if (data) {
+          setAccount(data)
+          // if snapshot includes a markPrice for our selected symbol, update live price
+          try {
+            if (Array.isArray(data.positions)) {
+              const p = data.positions.find(pp => String(pp.symbol).toUpperCase() === String(symbol).toUpperCase())
+              if (p && typeof p.markPrice !== 'undefined' && p.markPrice !== null) setLastPrice(Number(p.markPrice))
+            }
+          } catch (e) {}
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const start = () => {
+      // run every 3000ms to keep UI snappy
+      pollTimer = setInterval(() => {
+        try {
+          const last = lastWsAt ? Date.parse(lastWsAt) : 0
+          const age = Date.now() - last
+          // if no ws update in last 3s, fetch snapshot
+          if (!lastWsAt || age > 3000) fetchSnapshot()
+        } catch (e) {}
+      }, 3000)
+    }
+
+    start()
+    return () => { if (pollTimer) clearInterval(pollTimer) }
+  }, [symbol, lastWsAt])
 
   return (
     <div className="container body-root">
