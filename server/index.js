@@ -963,46 +963,7 @@ function startWss() {
 function broadcastWs(obj) {
   try {
     if (!wss) return
-    // normalize some common aliases so clients with slightly different parsers
-    // (pos/position/data) all receive the same fields. Also ensure symbol is
-    // uppercase when present.
-    const out = Object.assign({}, obj)
-    try {
-      if (out.type === 'pos_delta') {
-        // If server sent top-level symbol/markPrice/positionAmt (market stream case),
-        // wrap them into a `position` object so clients that expect `position`/`pos`
-        // will process the delta uniformly.
-        if (!out.position && out.symbol) {
-          out.position = {
-            symbol: String(out.symbol).toUpperCase(),
-            positionAmt: typeof out.positionAmt !== 'undefined' ? Number(out.positionAmt) : 0,
-            entryPrice: typeof out.entryPrice !== 'undefined' ? Number(out.entryPrice) : undefined,
-            markPrice: typeof out.markPrice !== 'undefined' ? Number(out.markPrice) : undefined,
-            unrealizedProfit: typeof out.unrealizedProfit !== 'undefined' ? Number(out.unrealizedProfit) : 0,
-            leverage: typeof out.leverage !== 'undefined' ? out.leverage : undefined,
-            positionInitialMargin: typeof out.positionInitialMargin !== 'undefined' ? Number(out.positionInitialMargin) : undefined,
-            marginType: out.marginType || undefined,
-            isolatedWallet: typeof out.isolatedWallet !== 'undefined' ? Number(out.isolatedWallet) : undefined
-          }
-        }
-        // copy position -> pos and data
-        if (out.position && !out.pos) out.pos = out.position
-        if (!out.position && out.pos) out.position = out.pos
-        if (!out.data) out.data = out.position || out.pos || out.data
-        const p = out.position || out.pos || out.data
-        if (p && p.symbol) p.symbol = String(p.symbol).toUpperCase()
-        // ensure commonly used numeric fields exist
-        if (p) {
-          if (typeof p.positionAmt !== 'undefined') p.positionAmt = Number(p.positionAmt) || 0
-          if (typeof p.unrealizedProfit !== 'undefined') p.unrealizedProfit = Number(p.unrealizedProfit) || 0
-          if (typeof out.unrealizedProfit !== 'undefined' && (typeof p.unrealizedProfit === 'undefined' || p.unrealizedProfit === 0)) p.unrealizedProfit = Number(out.unrealizedProfit) || p.unrealizedProfit || 0
-        }
-      } else if (out.type === 'acct_delta') {
-        if (!out.data) out.data = out.totals || out.totals || out.data
-      }
-    } catch (e) {}
-
-    const payload = JSON.stringify(out)
+    const payload = JSON.stringify(obj)
     for (const c of wss.clients) {
       try { if (c.readyState === c.OPEN) c.send(payload) } catch (e) {}
     }
