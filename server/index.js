@@ -15,7 +15,9 @@ const USE_TESTNET = String(process.env.BINANCE_TESTNET || '').toLowerCase() === 
 
 // Allow overriding the base URLs via env vars for flexibility
 const FUTURES_API_BASE = process.env.BINANCE_FUTURES_API_BASE || (USE_TESTNET ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com')
-const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://stream.binance.com:9443')
+// For futures mainnet the websocket base is fstream.binance.com (linear/USDT futures)
+// Use stream.binancefuture.com for the official testnet websocket.
+const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://fstream.binance.com')
 const WebSocketClient = require('ws')
 const { WebSocketServer } = require('ws')
 
@@ -153,16 +155,50 @@ async function signedGet(path, params = {}) {
     throw new Error('Missing BINANCE_API_KEY or BINANCE_API_SECRET in environment')
   }
   const base = FUTURES_API_BASE
-  const ts = Date.now()
+  // use serverTimeOffsetMs to reduce timestamp errors (recvWindow)
+  const ts = Date.now() + (serverTimeOffsetMs || 0)
   const q = new URLSearchParams({ ...params, timestamp: String(ts) }).toString()
   const signature = sign(q)
   const url = `${base}${path}?${q}&signature=${signature}`
-  const res = await axios.get(url, { headers: { 'X-MBX-APIKEY': API_KEY } })
-  return res.data
+  try {
+    const res = await axios.get(url, { headers: { 'X-MBX-APIKEY': API_KEY } })
+    return res.data
+  } catch (err) {
+    // if Binance complains about timestamp, try syncing server time once and retry
+    const remote = err && err.response
+    if (remote && remote.data && remote.data.code === -1021) {
+      await syncServerTimeOnce()
+      try {
+        const ts2 = Date.now() + (serverTimeOffsetMs || 0)
+        const q2 = new URLSearchParams({ ...params, timestamp: String(ts2) }).toString()
+        const signature2 = sign(q2)
+        const url2 = `${base}${path}?${q2}&signature=${signature2}`
+        const res2 = await axios.get(url2, { headers: { 'X-MBX-APIKEY': API_KEY } })
+        return res2.data
+      } catch (e2) {
+        throw e2
+      }
+    }
+    throw err
+  }
 }
 
 // Simple in-memory cache for exchangeInfo per-symbol
 const exchangeCache = new Map()
+// server time offset (ms) to correct local clock skew against Binance
+let serverTimeOffsetMs = 0
+async function syncServerTimeOnce() {
+  try {
+    const r = await axios.get(`${FUTURES_API_BASE}/fapi/v1/time`)
+    const serverTs = r && r.data && r.data.serverTime ? Number(r.data.serverTime) : null
+    if (serverTs && isFinite(serverTs)) {
+      serverTimeOffsetMs = Number(serverTs) - Date.now()
+      console.info('synced server time offset (ms):', serverTimeOffsetMs)
+    }
+  } catch (e) {
+    // ignore
+  }
+}
 async function getExchangeInfoForSymbol(sym) {
   const s = String(sym || '').toUpperCase()
   if (!s) return null
@@ -379,8 +415,15 @@ async function startUserDataStream() {
     // create listen key
     const url = `${FUTURES_API_BASE}/fapi/v1/listenKey`
     const resp = await axios.post(url, null, { headers: { 'X-MBX-APIKEY': API_KEY } })
+    if (!resp) {
+      console.warn('listenKey creation returned no response', url)
+      return
+    }
     const listenKey = resp && resp.data && (resp.data.listenKey || resp.data) ? (resp.data.listenKey || resp.data) : null
-    if (!listenKey) return
+    if (!listenKey) {
+      console.warn('listenKey creation unexpected response', { status: resp.status, body: resp.data })
+      return
+    }
     userData.listenKey = listenKey
 
     // open websocket to user-data stream
@@ -507,11 +550,31 @@ async function startUserDataStream() {
     }, 1000 * 60 * 30)
 
   } catch (err) {
-    console.warn('startUserDataStream failed', err && err.message)
+    const remote = err && err.response
+    if (remote) {
+      try { console.warn('startUserDataStream failed', { status: remote.status, data: remote.data }) } catch (e) { console.warn('startUserDataStream failed', remote.status) }
+    } else {
+      console.warn('startUserDataStream failed', err && err.message)
+    }
+    // If Binance indicates an IP ban (418 / -1003), respect the ban-until timestamp if available
+    try {
+      if (remote && remote.status === 418 && remote.data && typeof remote.data.msg === 'string') {
+        const m = String(remote.data.msg).match(/(\d{10,})/)
+        if (m && m[1]) {
+          const bannedUntil = Number(m[1])
+          const banMs = Math.max(0, bannedUntil - Date.now())
+          // set backoff to remaining ban duration or at least 60s, cap to 24h
+          userData.reconnectBackoffMs = Math.min(Math.max(banMs, 60 * 1000), 24 * 60 * 60 * 1000)
+          console.warn('startUserDataStream: IP appears banned, delaying next listenKey attempt for (ms):', userData.reconnectBackoffMs)
+        }
+      }
+    } catch (e) {}
+
     if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
-    const delay = Math.min(userData.reconnectBackoffMs || 1000, 300000)
+    const delay = userData.reconnectBackoffMs || 1000
     userData.reconnectTimer = setTimeout(() => startUserDataStream(), delay)
-    userData.reconnectBackoffMs = Math.min((userData.reconnectBackoffMs || 1000) * 2, 300000)
+    // increase backoff for next time (cap long) — keep exponential growth
+    userData.reconnectBackoffMs = Math.min((userData.reconnectBackoffMs || 1000) * 2, 24 * 60 * 60 * 1000)
   }
 }
 
