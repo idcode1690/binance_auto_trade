@@ -497,17 +497,42 @@ async function startUserDataStream() {
           try {
             const acct = (data.a || data.data || data) // 'a' contains ACCOUNT_UPDATE payload
             // Extract positions (Binance uses P array for positions)
-            const positions = Array.isArray(acct.P) ? acct.P.map(pp => ({
-              symbol: pp.s || pp.symbol,
-              positionAmt: Number(pp.pa || pp.positionAmt || 0),
-              entryPrice: Number(pp.ep || pp.entryPrice || 0),
-              unrealizedProfit: Number(pp.up || pp.unrealizedProfit || 0) || 0,
-              // leave leverage/margin fields undefined unless provided elsewhere
-              leverage: undefined,
-              marginType: undefined,
-              positionInitialMargin: 0,
-              isolatedWallet: undefined
-            })) : (latestAccountSnapshot && Array.isArray(latestAccountSnapshot.positions) ? latestAccountSnapshot.positions : [])
+            let positions = []
+            if (Array.isArray(acct.P)) {
+              positions = acct.P.map(pp => ({
+                symbol: pp.s || pp.symbol,
+                positionAmt: Number(pp.pa || pp.positionAmt || 0),
+                entryPrice: Number(pp.ep || pp.entryPrice || 0),
+                unrealizedProfit: Number(pp.up || pp.unrealizedProfit || 0) || 0,
+                // default placeholders; will try to preserve known margin/lev fields from cached snapshot
+                leverage: undefined,
+                marginType: undefined,
+                positionInitialMargin: 0,
+                isolatedWallet: undefined,
+                markPrice: undefined
+              }))
+              // preserve leverage/margin/init fields from previous cached snapshot when available
+              try {
+                if (latestAccountSnapshot && Array.isArray(latestAccountSnapshot.positions)) {
+                  positions = positions.map(p => {
+                    const old = latestAccountSnapshot.positions.find(x => String(x.symbol || '').toUpperCase() === String(p.symbol || '').toUpperCase())
+                    if (old) {
+                      // keep old leverage/margin/initial values when present, but prefer fresh amount/entry/unrealized
+                      return Object.assign({}, old, p, {
+                        // ensure we don't accidentally overwrite old leverage/margin if new values are undefined
+                        leverage: (typeof p.leverage !== 'undefined') ? p.leverage : old.leverage,
+                        marginType: (typeof p.marginType !== 'undefined') ? p.marginType : old.marginType,
+                        positionInitialMargin: (typeof p.positionInitialMargin !== 'undefined' && p.positionInitialMargin) ? p.positionInitialMargin : (old.positionInitialMargin || 0),
+                        isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? p.isolatedWallet : old.isolatedWallet
+                      })
+                    }
+                    return p
+                  })
+                }
+              } catch (e) {}
+            } else {
+              positions = (latestAccountSnapshot && Array.isArray(latestAccountSnapshot.positions)) ? latestAccountSnapshot.positions : []
+            }
 
             // Try to infer wallet balance from balances array (B) if present
             let totalWalletBalance = (latestAccountSnapshot && Number(latestAccountSnapshot.totalWalletBalance || 0)) || 0
