@@ -431,6 +431,10 @@ export default function App() {
 
                           // compute unrealized PnL using mark price (more consistent with Binance)
                           const computedUpl = (mark - entry) * amt
+                          // also consider index price if Binance provides it (sometimes used for PNL/liq)
+                          const indexPrice = Number(p.indexPrice) || 0
+                          const indexUsed = indexPrice || mark
+                          const computedUplIndex = (indexUsed - entry) * amt
                           // prefer explicit server-provided unrealizedProfit if present
                           const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : computedUpl
 
@@ -441,16 +445,24 @@ export default function App() {
                           const notional = (Math.abs(amt) * mark) || 0
 
                           let roiPct = null
+                          let roiIndexPct = null
                           if (initMargin && initMargin > 0) {
                             roiPct = (upl / initMargin) * 100
+                            roiIndexPct = ( (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? (Number(p.unrealizedProfit) / initMargin) * 100 : (computedUplIndex / initMargin) * 100 )
                           } else if (lev && notional > 0) {
                             const usedMargin = notional / lev
-                            if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
+                            if (usedMargin > 0) {
+                              roiPct = (upl / usedMargin) * 100
+                              roiIndexPct = (computedUplIndex / usedMargin) * 100
+                            }
                           } else if (lev && entry && Math.abs(amt) > 0) {
                             // last resort: estimate used margin from entry price if mark not available
                             const fallbackNotional = Math.abs(amt) * entry
                             const used = fallbackNotional / (lev || 1)
-                            if (used > 0) roiPct = (upl / used) * 100
+                            if (used > 0) {
+                              roiPct = (upl / used) * 100
+                              roiIndexPct = (computedUplIndex / used) * 100
+                            }
                           }
 
                           const isPos = upl >= 0
@@ -481,7 +493,7 @@ export default function App() {
                               <div style={{padding:'8px',background:'rgba(0,0,0,0.02)',fontSize:12,color:'#111',borderTop:'1px solid rgba(0,0,0,0.04)'}}>
                                 <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Debug data</div>
                                 <div style={{whiteSpace:'pre-wrap',fontFamily:'monospace',fontSize:11,color:'#222'}}>
-                                  {`positionAmt: ${String(p.positionAmt)}\nentryPrice: ${String(p.entryPrice)}\nmarkPrice: ${String(p.markPrice)}\npositionInitialMargin: ${String(p.positionInitialMargin || p.initialMargin || '')}\nisolatedWallet: ${String(p.isolatedWallet || '')}\nunrealizedProfit(raw): ${String(p.unrealizedProfit)}\ncomputedUpl: ${Number(computedUpl || 0).toFixed(6)}\nusedMargin(estimated): ${initMargin && initMargin > 0 ? initMargin.toFixed(6) : (lev ? ( (notional/lev).toFixed(6) ) : '—')}\nnotional: ${Number(notional || 0).toFixed(6)}\nroiPct(computed): ${roiPct != null ? Number(roiPct).toFixed(6) : '—'}`}
+                                  {`positionAmt: ${String(p.positionAmt)}\nentryPrice: ${String(p.entryPrice)}\nmarkPrice: ${String(p.markPrice)}\nindexPrice: ${String(p.indexPrice || '')}\npositionInitialMargin: ${String(p.positionInitialMargin || p.initialMargin || '')}\nisolatedWallet: ${String(p.isolatedWallet || '')}\nunrealizedProfit(raw): ${String(p.unrealizedProfit)}\ncomputedUpl(mark): ${Number(computedUpl || 0).toFixed(6)}\ncomputedUpl(index): ${Number(computedUplIndex || 0).toFixed(6)}\nusedMargin(estimated): ${initMargin && initMargin > 0 ? initMargin.toFixed(6) : (lev ? ( (notional/lev).toFixed(6) ) : '—')}\nnotional: ${Number(notional || 0).toFixed(6)}\nroiPct(mark): ${roiPct != null ? Number(roiPct).toFixed(6) : '—'}\nroiPct(index): ${roiIndexPct != null ? Number(roiIndexPct).toFixed(6) : '—'}`}
                                 </div>
                               </div>
                             ) : null}
