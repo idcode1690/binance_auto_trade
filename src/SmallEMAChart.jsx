@@ -201,7 +201,9 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     }
   }, [livePrice])
   const width = 600
-  const height = 160
+  // default height increased for better visibility; zoom toggles larger view
+  const [expanded, setExpanded] = useState(false)
+  const height = expanded ? 380 : 220
   const padding = 2
   const points = klines.length
   // viewCount: number of candles visible (user-controlled via mouse wheel)
@@ -230,6 +232,19 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
   const canZoomIn = viewN > minView
   const canZoomOut = viewN < Math.min(points, maxView)
+
+  // adjust viewCount when expanded toggles to provide a zoomed-in view
+  useEffect(() => {
+    if (!points) return
+    if (expanded) {
+      // reduce visible candles to give zoomed feel
+      setViewCount(vc => Math.max(minView, Math.round(vc * 0.6)))
+    } else {
+      // expand visible candles back
+      setViewCount(vc => Math.min(Math.max(minView, points || 0, maxView), Math.round(vc / 0.6)))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded])
 
   // notifiedRef + onCross effect must be declared before any early returns
   const notifiedRef = useRef(new Set())
