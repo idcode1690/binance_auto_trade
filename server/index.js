@@ -18,6 +18,101 @@ const FUTURES_API_BASE = process.env.BINANCE_FUTURES_API_BASE || (USE_TESTNET ? 
 const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://stream.binance.com:9443')
 const WebSocketClient = require('ws')
 
+// market data WS (markPrice) to provide low-latency price updates for PNL
+let marketWs = null
+let marketSubscribedSymbols = []
+
+function normalizeSymbolsList(arr) {
+  return Array.from(new Set((arr || []).map(s => String(s || '').toUpperCase()).filter(Boolean)))
+}
+
+function updateMarketSubscriptionsFromSnapshot(snapshot) {
+  try {
+    if (!snapshot || !Array.isArray(snapshot.positions)) return
+    const symbols = normalizeSymbolsList(snapshot.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0).map(p => p.symbol))
+    // if nothing to subscribe, close existing
+    if (!symbols.length) {
+      if (marketWs) {
+        try { marketWs.terminate() } catch (e) {}
+        marketWs = null
+        marketSubscribedSymbols = []
+      }
+      return
+    }
+    // same set -> ignore
+    const same = symbols.length === marketSubscribedSymbols.length && symbols.every(s => marketSubscribedSymbols.includes(s))
+    if (same) return
+
+    // build stream URL: subscribe to markPrice per symbol
+    const streams = symbols.map(s => `${s.toLowerCase()}@markPrice`).join('/')
+    const url = `${FUTURES_WS_BASE}/stream?streams=${streams}`
+
+    // close previous
+    if (marketWs) {
+      try { marketWs.terminate() } catch (e) {}
+      marketWs = null
+    }
+
+    marketSubscribedSymbols = symbols
+    marketWs = new WebSocketClient(url)
+
+    marketWs.on('open', () => {
+      console.log('market markPrice ws open for', symbols.join(', '))
+    })
+
+    marketWs.on('message', (msg) => {
+      try {
+        const parsed = JSON.parse(msg.toString())
+        // wrapped stream message: { stream, data }
+        const data = parsed && (parsed.data || parsed) ? (parsed.data || parsed) : null
+        if (!data) return
+        const sym = (data.s || data.symbol || '').toUpperCase()
+        const markPrice = Number(data.p || data.markPrice || data.price || 0)
+        if (!sym || !isFinite(markPrice)) return
+
+        // update latestAccountSnapshot positions for this symbol
+        if (!latestAccountSnapshot) return
+        let prevTotalUpl = Number(latestAccountSnapshot.totalUnrealizedProfit || 0)
+        let newTotalUpl = 0
+        latestAccountSnapshot.positions = latestAccountSnapshot.positions.map(p => {
+          if (!p || !p.symbol) return p
+          if (String(p.symbol).toUpperCase() === sym) {
+            const amt = Number(p.positionAmt) || 0
+            const entry = Number(p.entryPrice) || 0
+            const newUpl = (markPrice - entry) * amt
+            return { ...p, markPrice, unrealizedProfit: newUpl }
+          }
+          return p
+        })
+        for (const pp of latestAccountSnapshot.positions) {
+          newTotalUpl += Number(pp.unrealizedProfit || 0)
+        }
+        const delta = newTotalUpl - prevTotalUpl
+        latestAccountSnapshot.totalUnrealizedProfit = newTotalUpl
+        latestAccountSnapshot.totalWalletBalance = Number(latestAccountSnapshot.totalWalletBalance || 0) + delta
+        // broadcast updated snapshot to SSE clients
+        broadcastAccountUpdate(latestAccountSnapshot)
+      } catch (e) {
+        // ignore parse errors
+      }
+    })
+
+    marketWs.on('close', (code, reason) => {
+      console.warn('market ws closed', code, reason)
+      marketWs = null
+      marketSubscribedSymbols = []
+      // don't aggressively reconnect here; will be re-established when snapshot updates
+    })
+
+    marketWs.on('error', (err) => {
+      console.warn('market ws error', err && err.message)
+      try { if (marketWs) marketWs.terminate() } catch (e) {}
+      marketWs = null
+      marketSubscribedSymbols = []
+    })
+  } catch (e) {}
+}
+
 // SSE clients and latest account snapshot cache
 const sseClients = new Set()
 let latestAccountSnapshot = null
@@ -182,6 +277,8 @@ function broadcastAccountUpdate(obj) {
   for (const client of sseClients) {
     try { client.write(payload) } catch (e) { sseClients.delete(client) }
   }
+  // update market subscriptions based on latest positions
+  try { updateMarketSubscriptionsFromSnapshot(latestAccountSnapshot) } catch (e) {}
 }
 
 // Poll account snapshot periodically as a fallback in case user-data websocket isn't available
