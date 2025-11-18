@@ -277,7 +277,7 @@ export default function App() {
     return (
       <div className="account-card">
         <div className="account-row account-top">
-          <div className="account-title">Futures USDT Balance</div>
+           <div className="account-title">USDT Balance</div>
           <div className="account-balance">{formatPrice(bal)}</div>
         </div>
         <div className="account-row account-bottom">
