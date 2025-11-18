@@ -290,9 +290,42 @@ export default function App() {
           <div className="account-row account-bottom">
             <div className="account-sub">Margin Balance</div>
             <div className="account-balance">
-              {account && (typeof account.totalMarginBalance !== 'undefined' || typeof account.availableBalance !== 'undefined')
-                ? formatPrice(Number(account.totalMarginBalance ?? account.availableBalance))
-                : '—'}
+              {(() => {
+                // prefer explicit top-level field
+                if (account && typeof account.totalMarginBalance !== 'undefined' && account.totalMarginBalance !== null) {
+                  return formatPrice(Number(account.totalMarginBalance))
+                }
+                if (account && typeof account.availableBalance !== 'undefined' && account.availableBalance !== null) {
+                  return formatPrice(Number(account.availableBalance))
+                }
+                // fallback: estimate margin balance from positions
+                try {
+                  if (account && Array.isArray(account.positions) && account.positions.length) {
+                    let sum = 0
+                    for (const p of account.positions) {
+                      if (!p) continue
+                      const init = Number(p.positionInitialMargin || 0) || 0
+                      if (init && init > 0) { sum += init; continue }
+                      // isolatedWallet if present
+                      if (typeof p.isolatedWallet !== 'undefined' && p.isolatedWallet !== null) {
+                        const iso = Number(p.isolatedWallet) || 0
+                        if (iso && iso > 0) { sum += iso; continue }
+                      }
+                      // last resort: estimate from notional / leverage
+                      const amt = Math.abs(Number(p.positionAmt) || 0)
+                      const price = Number(p.markPrice || p.entryPrice || 0) || 0
+                      const lev = p.leverage ? Number(p.leverage) : 0
+                      if (amt > 0 && price > 0 && lev > 0) {
+                        const notional = amt * price
+                        const used = notional / lev
+                        if (isFinite(used)) sum += used
+                      }
+                    }
+                    if (sum > 0) return formatPrice(sum)
+                  }
+                } catch (e) {}
+                return '—'
+              })()}
             </div>
           </div>
       </div>
