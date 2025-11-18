@@ -52,7 +52,6 @@ export default function App() {
     try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
   })
   const [account, setAccount] = useState(null)
-  const [showSymbols, setShowSymbols] = useState(false)
   const [wsStatus, setWsStatus] = useState('disconnected')
   const [lastWsAt, setLastWsAt] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
@@ -538,26 +537,7 @@ export default function App() {
             <div className="meta">
               <AccountSummary account={derivedAccount || account} />
             </div>
-            <div style={{marginTop:8}}>
-              <button className="small-btn" onClick={() => setShowSymbols(v => !v)} style={{padding:'6px 8px',borderRadius:6,border:'1px solid rgba(0,0,0,0.06)',background:'#fff'}}> {showSymbols ? 'Hide Symbols' : 'Show Symbols'}</button>
-              {showSymbols && (
-                <div className="symbols-debug" style={{marginTop:8,fontSize:12,color:'var(--muted)'}}>
-                  <div style={{fontSize:12,marginBottom:6}}>Selected: <strong>{symbol}</strong> (<code style={{fontSize:11}}>{normalizeSym(symbol)}</code>)</div>
-                  <div style={{fontWeight:700,marginBottom:4}}>Detected positions:</div>
-                  <div style={{maxHeight:160,overflow:'auto',padding:6,border:'1px solid rgba(0,0,0,0.04)',borderRadius:6,background:'rgba(0,0,0,0.02)'}}>
-                    {(() => {
-                      const snap = derivedAccount || account
-                      if (!snap || !Array.isArray(snap.positions) || !snap.positions.length) return (<div style={{color:'var(--muted)'}}>no positions</div>)
-                      return (
-                        <ul style={{margin:0,paddingLeft:16}}>
-                          {snap.positions.map((p, i) => (<li key={i} style={{padding:'2px 0'}}>{String((p && p.symbol) || '—')} → <code style={{fontSize:11}}>{normalizeSym((p && p.symbol) || '')}</code></li>))}
-                        </ul>
-                      )
-                    })()}
-                  </div>
-                </div>
-              )}
-            </div>
+            
 
             <div style={{marginTop:12}}>
               {/* Combined Cross (left) / Orders (right) view */}
