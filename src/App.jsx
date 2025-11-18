@@ -101,27 +101,36 @@ export default function App() {
     if (!account) return null
     // shallow clone of account but keep authoritative totals intact
     const acc = { ...account }
-    if (Array.isArray(account.positions) && lastPrice != null && isFinite(Number(lastPrice))) {
+    // compute displayUnrealizedProfit for all positions using latest markPrice or lastPrice
+    if (Array.isArray(account.positions)) {
       acc.positions = account.positions.map(p => {
         try {
           if (!p || !p.symbol) return p
-          if (normalizeSym(p.symbol) === normalizeSym(symbol)) {
-            const amt = Number(p.positionAmt) || 0
-            if (Math.abs(amt) === 0) return { ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 }
-            const entry = Number(p.entryPrice) || 0
-            const newUpl = (Number(lastPrice) - entry) * amt
-            // attach a display-only field so totals remain the server's values
-            return { ...p, displayUnrealizedProfit: newUpl }
-          }
-        } catch (e) {}
-        return { ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 }
+          const amt = Number(p.positionAmt) || 0
+          const entry = Number(p.entryPrice) || 0
+          const mark = (typeof p.markPrice !== 'undefined' && p.markPrice !== null) ? Number(p.markPrice) : (isFinite(Number(lastPrice)) ? Number(lastPrice) : entry || 0)
+          const newUpl = (mark - entry) * amt
+          // prefer server unrealizedProfit when it's fresh, but keep a display-only fast value
+          const disp = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : newUpl
+          return { ...p, displayUnrealizedProfit: disp, _computedUpl: newUpl, _displayMark: mark }
+        } catch (e) { return { ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 } }
       })
     } else {
-      acc.positions = account.positions ? account.positions.map(p => ({ ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 })) : []
+      acc.positions = []
     }
-    // keep authoritative totals as received from server to match Binance
-    acc.totalUnrealizedProfit = Number(account.totalUnrealizedProfit) || 0
-    acc.totalWalletBalance = Number(account.totalWalletBalance) || 0
+
+    // compute display totals from per-position displayUnrealizedProfit so price ticks update totals immediately
+    const displayTotalUnrealized = acc.positions.reduce((s, p) => s + (Number(p.displayUnrealizedProfit) || 0), 0)
+    const serverTotalUnrealized = Number(account.totalUnrealizedProfit) || 0
+    const serverWallet = Number(account.totalWalletBalance) || Number(futuresBalanceStr || 0)
+    // displayWalletBalance = serverWallet + (displayTotalUnrealized - serverTotalUnrealized)
+    const displayTotalWallet = serverWallet + (displayTotalUnrealized - serverTotalUnrealized)
+
+    // keep authoritative totals but expose display totals for UI rendering consistency
+    acc.totalUnrealizedProfit = serverTotalUnrealized
+    acc.totalWalletBalance = serverWallet
+    acc.displayTotalUnrealizedProfit = displayTotalUnrealized
+    acc.displayTotalWalletBalance = displayTotalWallet
     return acc
   }, [account, lastPrice, symbol])
 
@@ -145,8 +154,9 @@ export default function App() {
   }
 
   function AccountSummary({ account }) {
-    const bal = account && typeof account.totalWalletBalance !== 'undefined' ? Number(account.totalWalletBalance) : Number(futuresBalanceStr || 0)
-    const upl = account && typeof account.totalUnrealizedProfit !== 'undefined' ? Number(account.totalUnrealizedProfit) : 0
+    // prefer display totals when available so totals move in sync with price ticks
+    const bal = account && typeof account.displayTotalWalletBalance !== 'undefined' ? Number(account.displayTotalWalletBalance) : (account && typeof account.totalWalletBalance !== 'undefined' ? Number(account.totalWalletBalance) : Number(futuresBalanceStr || 0))
+    const upl = account && typeof account.displayTotalUnrealizedProfit !== 'undefined' ? Number(account.displayTotalUnrealizedProfit) : (account && typeof account.totalUnrealizedProfit !== 'undefined' ? Number(account.totalUnrealizedProfit) : 0)
     const uplPos = upl >= 0
     return (
       <div className="account-card">
