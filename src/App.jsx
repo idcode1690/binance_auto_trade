@@ -49,6 +49,8 @@ export default function App() {
     try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
   })
   const [account, setAccount] = useState(null)
+  const [sseStatus, setSseStatus] = useState('disconnected')
+  const [lastSseAt, setLastSseAt] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
   })
@@ -107,11 +109,13 @@ export default function App() {
         }
       }
       if (es) {
+        es.onopen = () => { setSseStatus('connected'); console.info('SSE open', new Date().toISOString()) }
         es.onmessage = (ev) => {
           try {
             const data = JSON.parse(ev.data)
             if (!mounted) return
             if (data) {
+              setLastSseAt(new Date().toISOString())
               setAccount(data)
               if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
                 try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
@@ -128,7 +132,7 @@ export default function App() {
             }
           } catch (e) {}
         }
-        es.onerror = () => { /* keep, fallback to polling if SSE dies */ }
+        es.onerror = (err) => { setSseStatus('error'); console.warn('SSE error', err); /* keep, fallback to polling if SSE dies */ }
       }
     } catch (e) { es = null }
     const backendUrls = [
@@ -170,6 +174,15 @@ export default function App() {
     const id = setInterval(fetchAccount, 3000)
     return () => { mounted = false; clearInterval(id); try { if (es) es.close() } catch (e) {} }
   }, [symbol])
+
+    // expose SSE status in the UI (simple indicator)
+    const SseIndicator = () => (
+      <div style={{ fontSize: 12, marginLeft: 8 }}>
+        <span style={{ opacity: 0.7 }}>SSE:</span>
+        <span style={{ marginLeft: 6, fontWeight: 600, color: sseStatus === 'connected' ? '#16a34a' : sseStatus === 'error' ? '#dc2626' : '#666' }}>{sseStatus}</span>
+        {lastSseAt ? <span style={{ marginLeft: 8, opacity: 0.7 }}>last {new Date(lastSseAt).toLocaleTimeString()}</span> : null}
+      </div>
+    )
 
   const wsRef = useRef(null)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
