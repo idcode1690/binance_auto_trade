@@ -215,12 +215,17 @@ export default function App() {
   }
 
   const wsRef = useRef(null)
+  const [initialLoaded, setInitialLoaded] = useState(false)
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
 
   // WebSocket consumer for low-latency account/position deltas from server
+  // Only connect after we have attempted an initial load/seed to avoid
+  // racing with the initial snapshot. This ensures UI shows initial data
+  // then switches to socket for realtime deltas.
   useEffect(() => {
+    if (!initialLoaded) return
     let mounted = true
     let ws = null
     let reconnectTimer = null
@@ -358,7 +363,7 @@ export default function App() {
       try { if (ws) ws.close() } catch (e) {}
       wsRef.current = null
     }
-  }, [symbol])
+  }, [symbol, initialLoaded])
 
   // On mount: attempt a single REST GET to `/api/futures/account` to seed initial data
   // If no cached snapshot is available, request the manual seed endpoint once.
@@ -393,8 +398,11 @@ export default function App() {
             }
           } catch (e) {}
         }
+        // mark initial load attempt complete so WS can connect
+        try { setInitialLoaded(true) } catch (e) {}
       } catch (e) {
         console.warn('initial account fetch failed', e && e.message)
+        try { setInitialLoaded(true) } catch (e2) {}
       }
     })()
     return () => { mounted = false }
