@@ -29,33 +29,43 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
   const emaLongRef = useRef(null)
 
   useEffect(() => {
-    // Use Binance Futures WebSocket (fstream) for klines + trades only.
-    // We intentionally avoid an initial REST klines fetch here so the
-    // component relies solely on websocket data to reduce REST usage.
+    let cancelled = false
     let ws = null
-    let closed = false
-    let initTimer = null
+
+    async function load() {
+      setIsLoading(true)
+      try {
+        const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
+        const res = await fetch(url)
+        const data = await res.json()
+        const parsed = data.map(r => ({
+          open: parseFloat(r[1]),
+          high: parseFloat(r[2]),
+          low: parseFloat(r[3]),
+          close: parseFloat(r[4]),
+          closed: true,
+          time: r[0]
+        }))
+        if (cancelled) return
+        setKlines(parsed)
+        setIsLoading(false)
+      } catch (err) {
+        console.warn('fetch klines failed', err)
+        setKlines([])
+        setIsLoading(false)
+      }
+    }
 
     try {
-      const base = 'wss://fstream.binance.com'
       const symLower = String(symbol || 'BTCUSDT').toLowerCase()
       const streamName = `${symLower}@kline_${interval}/${symLower}@trade`
-      const wsUrl = `${base}/stream?streams=${streamName}`
+      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streamName}`
       ws = new WebSocket(wsUrl)
-
-      ws.onopen = () => {
-        // start a small timer: if no kline arrives within 6s, stop showing loading
-        initTimer = setTimeout(() => {
-          setIsLoading(false)
-        }, 6000)
-      }
-
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data)
           const data = msg.data || msg
           if (data && data.k) {
-            setIsLoading(false)
             const k = data.k
             const candle = {
               open: parseFloat(k.o),
@@ -63,7 +73,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
               low: parseFloat(k.l),
               close: parseFloat(k.c),
               time: k.t,
-              closed: !!k.x
+              closed: !!k.x // k.x is true when the kline is closed
             }
             setKlines(prev => {
               if (!prev || prev.length === 0) return [candle]
@@ -88,23 +98,13 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
           }
         } catch (e) {}
       }
-
-      ws.onerror = (e) => {
-        console.warn('combined ws error', e)
-        // if websocket fails, stop loading after short delay so UI isn't stuck
-        if (initTimer) clearTimeout(initTimer)
-        setIsLoading(false)
-      }
+      ws.onerror = (e) => console.warn('combined ws error', e)
     } catch (e) {
       console.warn('failed to open combined websocket', e)
-      setIsLoading(false)
     }
 
-    return () => {
-      closed = true
-      if (initTimer) clearTimeout(initTimer)
-      try { if (ws) ws.close() } catch (e) {}
-    }
+    load()
+    return () => { cancelled = true; try { if (ws) ws.close() } catch {} }
   }, [interval, limit, symbol, onTrade])
 
   useEffect(() => {
