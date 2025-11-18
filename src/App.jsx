@@ -131,9 +131,10 @@ export default function App() {
     let backoffMs = 1000
     const MAX_BACKOFF = 30000
 
+    // prefer a single absolute backend URL so production static server won't receive relative /api requests
+    const BACKEND_BASE = 'http://127.0.0.1:3000'
     const sseUrls = [
-      'http://127.0.0.1:3000/api/futures/sse',
-      '/api/futures/sse'
+      `${BACKEND_BASE}/api/futures/sse`
     ]
 
     const connectSse = (urlIndex = 0) => {
@@ -209,8 +210,7 @@ export default function App() {
     connectSse(0)
 
     const backendUrls = [
-      'http://127.0.0.1:3000/api/futures/account',
-      '/api/futures/account'
+      `${BACKEND_BASE}/api/futures/account`
     ]
     const fetchAccount = async () => {
       for (const url of backendUrls) {
