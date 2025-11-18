@@ -441,86 +441,11 @@ function broadcastAccountUpdate(obj) {
   try { updateMarketSubscriptionsFromSnapshot(latestAccountSnapshot) } catch (e) {}
 }
 
-// Poll account snapshot periodically as a fallback in case user-data websocket isn't available
-let accountPollInterval = null
-async function pollAccountSnapshotOnce() {
-  if (!API_KEY || !API_SECRET) return
-  // respect Binance ban-until if present
-  if (binanceBanUntilMs && Date.now() < binanceBanUntilMs) {
-    // skip polling while banned
-    console.warn('Skipping account poll due to Binance ban until', new Date(binanceBanUntilMs).toISOString())
-    return
-  }
-  try {
-    const d = await signedGet('/fapi/v2/account')
-    const out = {
-      totalWalletBalance: typeof d.totalWalletBalance !== 'undefined' ? Number(d.totalWalletBalance) : null,
-      totalUnrealizedProfit: typeof d.totalUnrealizedProfit !== 'undefined' ? Number(d.totalUnrealizedProfit) : null,
-      positions: Array.isArray(d.positions) ? d.positions.map(p => ({
-        symbol: p.symbol,
-        positionAmt: Number(p.positionAmt) || 0,
-        entryPrice: Number(p.entryPrice) || 0,
-        unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
-        leverage: p.leverage ? Number(p.leverage) : undefined,
-        marginType: p.marginType || undefined,
-        positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
-        isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
-      })) : []
-    }
-    // enrich with premiumIndex where possible (non-blocking)
-    try {
-      const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
-      if (syms.length) {
-        const promises = syms.map(async s => {
-          try {
-            const data = await getPremiumIndexForSymbol(s)
-            return { symbol: s, data }
-          } catch (e) { return null }
-        })
-        const results = await Promise.all(promises)
-        const map = new Map()
-        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
-        out.positions = out.positions.map(p => {
-          const info = map.get(p.symbol)
-          if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
-          return p
-        })
-      }
-    } catch (e) {}
-    // broadcast to any SSE clients
-    broadcastAccountUpdate(out)
-  } catch (e) {
-    // keep quiet — failures are expected if keys are invalid or network issues occur
-    // but log minimally for debugging
-    try {
-      const remote = e && e.response
-      if (remote && remote.status === 418 && remote.data && typeof remote.data.msg === 'string') {
-        const m = String(remote.data.msg).match(/(\d{10,})/)
-        if (m && m[1]) {
-          const bannedUntil = Number(m[1])
-          if (isFinite(bannedUntil) && bannedUntil > Date.now()) {
-            binanceBanUntilMs = bannedUntil
-            console.warn('Binance reported IP ban during pollAccountSnapshotOnce until', new Date(binanceBanUntilMs).toISOString())
-          }
-        }
-      }
-    } catch (ee) {}
-    console.warn('pollAccountSnapshotOnce failed', e && e.message)
-  }
-}
-
-function startAccountPolling() {
-  if (accountPollInterval) return
-  accountPollInterval = setInterval(() => pollAccountSnapshotOnce(), BINANCE_POLL_INTERVAL_MS)
-  // run immediately once
-  pollAccountSnapshotOnce()
-}
-
-function stopAccountPolling() {
-  if (!accountPollInterval) return
-  clearInterval(accountPollInterval)
-  accountPollInterval = null
-}
+// NOTE: REST polling removed to avoid triggering Binance REST rate limits
+// The server will rely on the user-data websocket ('listenKey') and the
+// market markPrice websocket to drive account/position updates. If the
+// user-data stream is unavailable the server will attempt to re-establish
+// it using the listenKey flow rather than polling aggressively.
 
 // create and maintain futures user-data stream (listenKey)
 async function startUserDataStream() {
@@ -550,27 +475,11 @@ async function startUserDataStream() {
       console.log('user-data ws open')
       // reset backoff on successful open
       userData.reconnectBackoffMs = 1000
-      // stop account polling while ws is active (ws will drive updates)
-      try { stopAccountPolling() } catch (e) {}
-      // immediate fetch of account snapshot to seed cache
-      signedGet('/fapi/v2/account').then(d => {
-        const out = {
-          totalWalletBalance: typeof d.totalWalletBalance !== 'undefined' ? Number(d.totalWalletBalance) : null,
-          totalUnrealizedProfit: typeof d.totalUnrealizedProfit !== 'undefined' ? Number(d.totalUnrealizedProfit) : null,
-          positions: Array.isArray(d.positions) ? d.positions.map(p => ({
-            symbol: p.symbol,
-            positionAmt: Number(p.positionAmt) || 0,
-            entryPrice: Number(p.entryPrice) || 0,
-            unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
-            leverage: p.leverage ? Number(p.leverage) : undefined,
-            marginType: p.marginType || undefined,
-            positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
-            isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
-          })) : []
-        }
-        latestAccountSnapshot = out
-        broadcastAccountUpdate(out)
-      }).catch(() => {})
+      // NOTE: we no longer perform an immediate REST fetch to seed the snapshot
+      // to avoid triggering Binance REST rate limits. The server will wait for
+      // ACCOUNT_UPDATE messages on the user-data websocket to populate the
+      // latestAccountSnapshot. Market markPrice updates will be handled by the
+      // separate market websocket stream.
     })
 
     ws.on('message', async (msg) => {
@@ -578,56 +487,54 @@ async function startUserDataStream() {
         const data = JSON.parse(msg.toString())
         // Binance wraps user-data messages directly
         const evt = data.e || (data.data && data.data.e) || null
-        // If ACCOUNT_UPDATE or ORDER_TRADE_UPDATE, fetch full account snapshot
-        if (evt === 'ACCOUNT_UPDATE' || evt === 'ORDER_TRADE_UPDATE') {
+        // If ACCOUNT_UPDATE arrives from the user-data stream, parse it and
+        // update our cached snapshot without issuing a REST call. ORDER_TRADE_UPDATE
+        // messages are forwarded to clients.
+        if (evt === 'ACCOUNT_UPDATE') {
           try {
-            const d = await signedGet('/fapi/v2/account')
-            const out = {
-              totalWalletBalance: typeof d.totalWalletBalance !== 'undefined' ? Number(d.totalWalletBalance) : null,
-              totalUnrealizedProfit: typeof d.totalUnrealizedProfit !== 'undefined' ? Number(d.totalUnrealizedProfit) : null,
-              positions: Array.isArray(d.positions) ? d.positions.map(p => ({
-                symbol: p.symbol,
-                positionAmt: Number(p.positionAmt) || 0,
-                entryPrice: Number(p.entryPrice) || 0,
-                unrealizedProfit: Number(p.unRealizedProfit || p.unrealizedProfit) || 0,
-                leverage: p.leverage ? Number(p.leverage) : undefined,
-                marginType: p.marginType || undefined,
-                positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
-                isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined
-              })) : []
+            const acct = (data.a || data.data || data) // 'a' contains ACCOUNT_UPDATE payload
+            // Extract positions (Binance uses P array for positions)
+            const positions = Array.isArray(acct.P) ? acct.P.map(pp => ({
+              symbol: pp.s || pp.symbol,
+              positionAmt: Number(pp.pa || pp.positionAmt || 0),
+              entryPrice: Number(pp.ep || pp.entryPrice || 0),
+              unrealizedProfit: Number(pp.up || pp.unrealizedProfit || 0) || 0,
+              // leave leverage/margin fields undefined unless provided elsewhere
+              leverage: undefined,
+              marginType: undefined,
+              positionInitialMargin: 0,
+              isolatedWallet: undefined
+            })) : (latestAccountSnapshot && Array.isArray(latestAccountSnapshot.positions) ? latestAccountSnapshot.positions : [])
+
+            // Try to infer wallet balance from balances array (B) if present
+            let totalWalletBalance = (latestAccountSnapshot && Number(latestAccountSnapshot.totalWalletBalance || 0)) || 0
+            if (Array.isArray(acct.B)) {
+              const b = acct.B.find(x => (x.a || x.asset || '').toUpperCase() === 'USDT')
+              if (b) {
+                totalWalletBalance = Number(b.wb || b.walletBalance || b.cw || totalWalletBalance) || totalWalletBalance
+              }
             }
-            // try to enrich with premiumIndex
+
+            const totalUnrealizedProfit = positions.reduce((s, p) => s + (Number(p.unrealizedProfit) || 0), 0)
+            const out = { totalWalletBalance, totalUnrealizedProfit, positions }
+            latestAccountSnapshot = out
+            broadcastAccountUpdate(out)
+            try { broadcastWs({ type: 'acct_delta', totalUnrealizedProfit: out.totalUnrealizedProfit, totalWalletBalance: out.totalWalletBalance, ts: Date.now() }) } catch (e) {}
+            // broadcast per-position deltas as lightweight messages
             try {
-              const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
-              if (syms.length) {
-                        const promises = syms.map(async s => {
-                          try {
-                            const data = await getPremiumIndexForSymbol(s)
-                            return { symbol: s, data }
-                          } catch (e) { return null }
-                        })
-                        const results = await Promise.all(promises)
-                        const map = new Map()
-                        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
-                out.positions = out.positions.map(p => {
-                  const info = map.get(p.symbol)
-                  if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
-                  return p
-                })
+              for (const p of out.positions) {
+                broadcastWs({ type: 'pos_delta', position: p, markPrice: p.markPrice, ts: Date.now() })
               }
             } catch (e) {}
-            broadcastAccountUpdate(out)
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) {}
+        } else if (evt === 'ORDER_TRADE_UPDATE') {
+          try { broadcastWs({ type: 'order_update', data }) } catch (e) {}
         }
       } catch (e) {}
     })
 
     ws.on('close', (code, reason) => {
       console.warn('user-data ws closed', code, reason)
-      // ensure polling resumes
-      try { startAccountPolling() } catch (e) {}
       // reconnect with exponential backoff
       if (userData.reconnectTimer) clearTimeout(userData.reconnectTimer)
       const delay = Math.min(userData.reconnectBackoffMs || 1000, 300000)
@@ -699,8 +606,6 @@ async function startUserDataStream() {
 
 // start the user-data stream if we have keys
 startUserDataStream()
-// also start periodic polling to ensure we have a recent snapshot for SSE clients
-startAccountPolling()
 
 app.post('/api/futures/order', async (req, res) => {
   try {
