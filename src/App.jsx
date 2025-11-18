@@ -95,32 +95,33 @@ export default function App() {
   const candles = 0
 
   // derive a quick client-side account snapshot using live price for snappy PNL updates
+  // Important: do NOT mutate server-provided totals (totalUnrealizedProfit / totalWalletBalance)
+  // to avoid diverging from Binance. Instead compute per-position display UPL when lastPrice is available.
   const derivedAccount = useMemo(() => {
     if (!account) return null
-    // shallow clone
+    // shallow clone of account but keep authoritative totals intact
     const acc = { ...account }
-    let delta = 0
     if (Array.isArray(account.positions) && lastPrice != null && isFinite(Number(lastPrice))) {
       acc.positions = account.positions.map(p => {
         try {
           if (!p || !p.symbol) return p
-            if (normalizeSym(p.symbol) === normalizeSym(symbol)) {
+          if (normalizeSym(p.symbol) === normalizeSym(symbol)) {
             const amt = Number(p.positionAmt) || 0
-            if (Math.abs(amt) === 0) return p
+            if (Math.abs(amt) === 0) return { ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 }
             const entry = Number(p.entryPrice) || 0
             const newUpl = (Number(lastPrice) - entry) * amt
-            const oldUpl = Number(p.unrealizedProfit) || 0
-            delta += (newUpl - oldUpl)
-            return { ...p, unrealizedProfit: newUpl }
+            // attach a display-only field so totals remain the server's values
+            return { ...p, displayUnrealizedProfit: newUpl }
           }
         } catch (e) {}
-        return p
+        return { ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 }
       })
     } else {
-      acc.positions = account.positions
+      acc.positions = account.positions ? account.positions.map(p => ({ ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 })) : []
     }
-    acc.totalUnrealizedProfit = (Number(account.totalUnrealizedProfit) || 0) + delta
-    acc.totalWalletBalance = (Number(account.totalWalletBalance) || 0) + delta
+    // keep authoritative totals as received from server to match Binance
+    acc.totalUnrealizedProfit = Number(account.totalUnrealizedProfit) || 0
+    acc.totalWalletBalance = Number(account.totalWalletBalance) || 0
     return acc
   }, [account, lastPrice, symbol])
 
