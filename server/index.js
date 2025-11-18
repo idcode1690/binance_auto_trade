@@ -931,10 +931,31 @@ function startWss() {
   wss = new WebSocketServer({ server, path: '/ws/account' })
   wss.on('connection', (socket, req) => {
     console.log('ws client connected for account deltas')
-    // optional: send current snapshot as authoritative on connect
-    try {
-      if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot }))
-    } catch (e) {}
+    // On first client connect, if we don't yet have a full snapshot and
+    // API keys are available, perform a one-time safe REST seed so clients
+    // immediately receive authoritative account data. Guard with
+    // `userData.autoSeedDone` to avoid repeated REST calls.
+    (async () => {
+      try {
+        if (!latestAccountSnapshot && API_KEY && !userData.autoSeedDone) {
+          userData.autoSeedDone = true
+          try {
+            const snap = await seedAccountSnapshot()
+            if (snap) {
+              try { socket.send(JSON.stringify({ type: 'snapshot', account: snap })) } catch (e) {}
+            }
+          } catch (e) {
+            console.warn('seedAccountSnapshot on ws connect failed', e && (e.response ? e.response.data : e.message))
+            // fall back to sending cached snapshot (if any)
+            try { if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot })) } catch (e) {}
+          }
+        } else {
+          // send existing snapshot if available
+          try { if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot })) } catch (e) {}
+        }
+      } catch (e) {}
+    })()
+
     socket.on('close', () => { /* client disconnected */ })
   })
 }
