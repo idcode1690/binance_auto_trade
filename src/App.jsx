@@ -91,50 +91,88 @@ export default function App() {
   // Poll backend for Binance Futures account info (requires server running and .env set)
   useEffect(() => {
     let mounted = true
-    // try SSE subscription for realtime account updates; polling remains as fallback
     let es = null
-    try {
-      const sseUrls = [
-        'http://127.0.0.1:3000/api/futures/sse',
-        '/api/futures/sse'
-      ]
-      for (const url of sseUrls) {
-        try {
-          es = new EventSource(url)
-          // if EventSource connects, break
-          es.onopen = () => { /* opened */ }
-          break
-        } catch (err) {
-          es = null
+    let reconnectTimer = null
+    let backoffMs = 1000
+    const MAX_BACKOFF = 30000
+
+    const sseUrls = [
+      'http://127.0.0.1:3000/api/futures/sse',
+      '/api/futures/sse'
+    ]
+
+    const connectSse = (urlIndex = 0) => {
+      if (!mounted) return
+      const url = sseUrls[urlIndex]
+      try {
+        setSseStatus('connecting')
+        es = new EventSource(url)
+      } catch (err) {
+        // try next URL
+        if (urlIndex + 1 < sseUrls.length) {
+          connectSse(urlIndex + 1)
+        } else {
+          scheduleReconnect()
         }
+        return
       }
-      if (es) {
-        es.onopen = () => { setSseStatus('connected'); console.info('SSE open', new Date().toISOString()) }
-        es.onmessage = (ev) => {
-          try {
-            const data = JSON.parse(ev.data)
-            if (!mounted) return
-            if (data) {
-              setLastSseAt(new Date().toISOString())
-              setAccount(data)
-              if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-                try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-                setFuturesBalanceStr(String(data.totalWalletBalance))
-              }
-              if (Array.isArray(data.positions) && symbol) {
-                const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-                if (p) {
-                  const amt = Number(p.positionAmt) || 0
-                  try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-                  setHoldingsStr(String(amt))
-                }
+
+      es.onopen = () => {
+        backoffMs = 1000
+        setSseStatus('connected')
+        console.info('SSE connected', url, new Date().toISOString())
+      }
+
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data)
+          if (!mounted) return
+          if (data) {
+            setLastSseAt(new Date().toISOString())
+            setAccount(data)
+            if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+              try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+              setFuturesBalanceStr(String(data.totalWalletBalance))
+            }
+            if (Array.isArray(data.positions) && symbol) {
+              const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+              if (p) {
+                const amt = Number(p.positionAmt) || 0
+                try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+                setHoldingsStr(String(amt))
               }
             }
-          } catch (e) {}
-        }
-        es.onerror = (err) => { setSseStatus('error'); console.warn('SSE error', err); /* keep, fallback to polling if SSE dies */ }
+          }
+        } catch (e) { /* ignore malformed message */ }
       }
-    } catch (e) { es = null }
+
+      es.onerror = (err) => {
+        console.warn('SSE error', err)
+        setSseStatus('error')
+        try { es.close() } catch (e) {}
+        es = null
+        scheduleReconnect()
+      }
+    }
+
+    const scheduleReconnect = () => {
+      if (!mounted) return
+      setSseStatus('reconnecting')
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      reconnectTimer = setTimeout(() => {
+        // rotate URL each attempt to prefer local absolute then relative
+        try {
+          const nextIndex = Math.floor(Math.random() * sseUrls.length)
+          connectSse(nextIndex)
+        } finally {
+          backoffMs = Math.min(MAX_BACKOFF, backoffMs * 1.6)
+        }
+      }, backoffMs)
+    }
+
+    // initial connect
+    connectSse(0)
+
     const backendUrls = [
       'http://127.0.0.1:3000/api/futures/account',
       '/api/futures/account'
@@ -146,33 +184,37 @@ export default function App() {
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
           const data = await resp.json()
           if (!mounted) return
-                if (data) {
-                  setAccount(data)
-                  if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-                    try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-                    setFuturesBalanceStr(String(data.totalWalletBalance))
-                  }
-                  if (Array.isArray(data.positions) && symbol) {
-                    const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-                    if (p) {
-                      const amt = Number(p.positionAmt) || 0
-                      try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-                      setHoldingsStr(String(amt))
-                    }
-                  }
-                }
-          // success — stop trying other urls
+          if (data) {
+            setAccount(data)
+            if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
+              try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
+              setFuturesBalanceStr(String(data.totalWalletBalance))
+            }
+            if (Array.isArray(data.positions) && symbol) {
+              const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
+              if (p) {
+                const amt = Number(p.positionAmt) || 0
+                try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
+                setHoldingsStr(String(amt))
+              }
+            }
+          }
           return
         } catch (err) {
           // try next url
         }
       }
-      // all attempts failed — ignore and keep local values
     }
+
     fetchAccount()
-    // Poll more frequently for testnet/private info (faster UX)
     const id = setInterval(fetchAccount, 3000)
-    return () => { mounted = false; clearInterval(id); try { if (es) es.close() } catch (e) {} }
+
+    return () => {
+      mounted = false
+      clearInterval(id)
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      try { if (es) es.close() } catch (e) {}
+    }
   }, [symbol])
 
     // expose SSE status in the UI (simple indicator)
