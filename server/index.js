@@ -226,6 +226,9 @@ async function signedGet(path, params = {}) {
 
 // Simple in-memory cache for exchangeInfo per-symbol
 const exchangeCache = new Map()
+// Simple in-memory cache for premiumIndex per-symbol to reduce repeated calls
+const premiumIndexCache = new Map()
+const PREMIUM_INDEX_TTL_MS = Number(process.env.PREMIUM_INDEX_TTL_MS) || 30 * 1000
 // server time offset (ms) to correct local clock skew against Binance
 let serverTimeOffsetMs = 0
 async function syncServerTimeOnce() {
@@ -255,6 +258,24 @@ async function getExchangeInfoForSymbol(sym) {
     if (info) exchangeCache.set(s, { ts: now, info })
     return info
   } catch (err) {
+    return null
+  }
+}
+
+// Fetch premiumIndex for a symbol with short TTL caching to avoid repeated requests
+async function getPremiumIndexForSymbol(sym) {
+  const s = String(sym || '').toUpperCase()
+  if (!s) return null
+  const now = Date.now()
+  const cached = premiumIndexCache.get(s)
+  if (cached && (now - cached.ts) < PREMIUM_INDEX_TTL_MS) return cached.data
+  try {
+    const url = `${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`
+    const resp = await binanceRequest(url, { method: 'get' })
+    const data = resp && resp.data ? resp.data : null
+    premiumIndexCache.set(s, { ts: now, data })
+    return data
+  } catch (e) {
     return null
   }
 }
@@ -304,17 +325,13 @@ app.get('/api/futures/account', async (req, res) => {
         isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : (typeof p.isIsolatedWallet !== 'undefined' ? Number(p.isIsolatedWallet) : undefined)
       })) : []
     }
-    // enrich positions with markPrice and fundingRate where possible
+    // enrich positions with markPrice and fundingRate where possible (cached)
     try {
       const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
       if (syms.length) {
-        // pace premiumIndex requests through binanceRequest; cache briefly within this function to avoid per-fetch bursts
-        const premiumCache = new Map()
         const promises = syms.map(async s => {
           try {
-            const url = `${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`
-            const resp = await binanceRequest(url, { method: 'get' })
-            const data = resp && resp.data ? resp.data : null
+            const data = await getPremiumIndexForSymbol(s)
             return { symbol: s, data }
           } catch (e) { return null }
         })
@@ -336,6 +353,31 @@ app.get('/api/futures/account', async (req, res) => {
     latestAccountSnapshot = out
     res.json(out)
   } catch (err) {
+    // On error, if we have a cached latestAccountSnapshot, return a server-side fallback
+    try {
+      const remote = err && err.response
+      console.error('futures/account error', remote ? remote.data : err.message)
+      if (latestAccountSnapshot) {
+        const fallback = {
+          totalWalletBalance: typeof latestAccountSnapshot.totalWalletBalance !== 'undefined' ? Number(latestAccountSnapshot.totalWalletBalance) : 0,
+          totalUnrealizedProfit: typeof latestAccountSnapshot.totalUnrealizedProfit !== 'undefined' ? Number(latestAccountSnapshot.totalUnrealizedProfit) : 0,
+          positions: Array.isArray(latestAccountSnapshot.positions) ? latestAccountSnapshot.positions.map(p => ({
+            symbol: p.symbol,
+            positionAmt: Number(p.positionAmt) || 0,
+            entryPrice: Number(p.entryPrice) || 0,
+            unrealizedProfit: Number(p.unrealizedProfit || 0) || 0,
+            leverage: p.leverage ? Number(p.leverage) : undefined,
+            marginType: p.marginType || undefined,
+            positionInitialMargin: Number(p.positionInitialMargin || 0) || 0,
+            isolatedWallet: (typeof p.isolatedWallet !== 'undefined') ? Number(p.isolatedWallet) : undefined,
+            markPrice: p.markPrice ? Number(p.markPrice) : undefined,
+            fundingRate: p.fundingRate ? Number(p.fundingRate) : undefined
+          })) : []
+        }
+        fallback.warning = `Returning cached snapshot due to Binance REST error: ${err && (err.message || JSON.stringify(err))}`
+        return res.json(fallback)
+      }
+    } catch (e) {}
     const remote = err && err.response
     console.error('futures/account error', remote ? remote.data : err.message)
     // If Binance returned an auth error (401), return an empty snapshot with a warning
@@ -429,7 +471,12 @@ async function pollAccountSnapshotOnce() {
     try {
       const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
       if (syms.length) {
-        const promises = syms.map(s => axios.get(`${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`).then(r => ({ symbol: s, data: r.data })).catch(() => null))
+        const promises = syms.map(async s => {
+          try {
+            const data = await getPremiumIndexForSymbol(s)
+            return { symbol: s, data }
+          } catch (e) { return null }
+        })
         const results = await Promise.all(promises)
         const map = new Map()
         for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
@@ -555,9 +602,8 @@ async function startUserDataStream() {
               if (syms.length) {
                         const promises = syms.map(async s => {
                           try {
-                            const url = `${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`
-                            const r = await binanceRequest(url, { method: 'get' })
-                            return { symbol: s, data: r && r.data ? r.data : null }
+                            const data = await getPremiumIndexForSymbol(s)
+                            return { symbol: s, data }
                           } catch (e) { return null }
                         })
                         const results = await Promise.all(promises)
