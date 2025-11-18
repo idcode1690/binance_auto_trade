@@ -942,7 +942,30 @@ function startWss() {
 function broadcastWs(obj) {
   try {
     if (!wss) return
-    const payload = JSON.stringify(obj)
+    // normalize some common aliases so clients with slightly different parsers
+    // (pos/position/data) all receive the same fields. Also ensure symbol is
+    // uppercase when present.
+    const out = Object.assign({}, obj)
+    try {
+      if (out.type === 'pos_delta') {
+        // copy position -> pos and data
+        if (out.position && !out.pos) out.pos = out.position
+        if (!out.position && out.pos) out.position = out.pos
+        if (!out.data) out.data = out.position || out.pos || out.data
+        const p = out.position || out.pos || out.data
+        if (p && p.symbol) p.symbol = String(p.symbol).toUpperCase()
+        // ensure commonly used numeric fields exist
+        if (p) {
+          if (typeof p.positionAmt !== 'undefined') p.positionAmt = Number(p.positionAmt) || 0
+          if (typeof p.unrealizedProfit !== 'undefined') p.unrealizedProfit = Number(p.unrealizedProfit) || 0
+          if (typeof out.unrealizedProfit !== 'undefined' && (typeof p.unrealizedProfit === 'undefined' || p.unrealizedProfit === 0)) p.unrealizedProfit = Number(out.unrealizedProfit) || p.unrealizedProfit || 0
+        }
+      } else if (out.type === 'acct_delta') {
+        if (!out.data) out.data = out.totals || out.totals || out.data
+      }
+    } catch (e) {}
+
+    const payload = JSON.stringify(out)
     for (const c of wss.clients) {
       try { if (c.readyState === c.OPEN) c.send(payload) } catch (e) {}
     }
