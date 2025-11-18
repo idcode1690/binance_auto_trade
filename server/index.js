@@ -948,6 +948,22 @@ function broadcastWs(obj) {
     const out = Object.assign({}, obj)
     try {
       if (out.type === 'pos_delta') {
+        // If server sent top-level symbol/markPrice/positionAmt (market stream case),
+        // wrap them into a `position` object so clients that expect `position`/`pos`
+        // will process the delta uniformly.
+        if (!out.position && out.symbol) {
+          out.position = {
+            symbol: String(out.symbol).toUpperCase(),
+            positionAmt: typeof out.positionAmt !== 'undefined' ? Number(out.positionAmt) : 0,
+            entryPrice: typeof out.entryPrice !== 'undefined' ? Number(out.entryPrice) : undefined,
+            markPrice: typeof out.markPrice !== 'undefined' ? Number(out.markPrice) : undefined,
+            unrealizedProfit: typeof out.unrealizedProfit !== 'undefined' ? Number(out.unrealizedProfit) : 0,
+            leverage: typeof out.leverage !== 'undefined' ? out.leverage : undefined,
+            positionInitialMargin: typeof out.positionInitialMargin !== 'undefined' ? Number(out.positionInitialMargin) : undefined,
+            marginType: out.marginType || undefined,
+            isolatedWallet: typeof out.isolatedWallet !== 'undefined' ? Number(out.isolatedWallet) : undefined
+          }
+        }
         // copy position -> pos and data
         if (out.position && !out.pos) out.pos = out.position
         if (!out.position && out.pos) out.position = out.pos
