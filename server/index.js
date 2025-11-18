@@ -17,6 +17,10 @@ const USE_TESTNET = String(process.env.BINANCE_TESTNET || '').toLowerCase() === 
 const FUTURES_API_BASE = process.env.BINANCE_FUTURES_API_BASE || (USE_TESTNET ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com')
 const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://stream.binance.com:9443')
 const WebSocketClient = require('ws')
+const { WebSocketServer } = require('ws')
+
+// WS clients (for fast account/position deltas)
+let wss = null
 
 // market data WS (markPrice) to provide low-latency price updates for PNL
 let marketWs = null
@@ -81,7 +85,19 @@ function updateMarketSubscriptionsFromSnapshot(snapshot) {
             const amt = Number(p.positionAmt) || 0
             const entry = Number(p.entryPrice) || 0
             const newUpl = (markPrice - entry) * amt
-            return { ...p, markPrice, unrealizedProfit: newUpl }
+            const updated = { ...p, markPrice, unrealizedProfit: newUpl }
+            // send a lightweight ws delta for this symbol
+            try {
+              broadcastWs({
+                type: 'pos_delta',
+                symbol: sym,
+                markPrice,
+                positionAmt: amt,
+                unrealizedProfit: newUpl,
+                ts: Date.now()
+              })
+            } catch (e) {}
+            return updated
           }
           return p
         })
@@ -91,8 +107,11 @@ function updateMarketSubscriptionsFromSnapshot(snapshot) {
         const delta = newTotalUpl - prevTotalUpl
         latestAccountSnapshot.totalUnrealizedProfit = newTotalUpl
         latestAccountSnapshot.totalWalletBalance = Number(latestAccountSnapshot.totalWalletBalance || 0) + delta
-        // broadcast updated snapshot to SSE clients
+        // broadcast updated snapshot to SSE clients and a compact account delta to WS clients
         broadcastAccountUpdate(latestAccountSnapshot)
+        try {
+          broadcastWs({ type: 'acct_delta', totalUnrealizedProfit: latestAccountSnapshot.totalUnrealizedProfit, totalWalletBalance: latestAccountSnapshot.totalWalletBalance, ts: Date.now() })
+        } catch (e) {}
       } catch (e) {
         // ignore parse errors
       }
@@ -566,6 +585,35 @@ app.post('/api/futures/order', async (req, res) => {
   }
 })
 
-app.listen(PORT, () => {
+// create HTTP server so we can attach a websocket server to the same port
+const http = require('http')
+const server = http.createServer(app)
+
+// create WebSocket server for account deltas
+function startWss() {
+  if (wss) return
+  wss = new WebSocketServer({ server, path: '/ws/account' })
+  wss.on('connection', (socket, req) => {
+    console.log('ws client connected for account deltas')
+    // optional: send current snapshot as authoritative on connect
+    try {
+      if (latestAccountSnapshot) socket.send(JSON.stringify({ type: 'snapshot', account: latestAccountSnapshot }))
+    } catch (e) {}
+    socket.on('close', () => { /* client disconnected */ })
+  })
+}
+
+function broadcastWs(obj) {
+  try {
+    if (!wss) return
+    const payload = JSON.stringify(obj)
+    for (const c of wss.clients) {
+      try { if (c.readyState === c.OPEN) c.send(payload) } catch (e) {}
+    }
+  } catch (e) {}
+}
+
+server.listen(PORT, () => {
   console.log(`Futures proxy server listening on http://localhost:${PORT}`)
+  startWss()
 })
