@@ -4,11 +4,20 @@ const axios = require('axios')
 const crypto = require('crypto')
 const cors = require('cors')
 
+// Global handlers so the server doesn't exit on unexpected promise rejections or exceptions
+process.on('unhandledRejection', (reason, p) => {
+  try { console.error('Unhandled Rejection at:', p, 'reason:', reason && (reason.stack || reason)) } catch (e) {}
+})
+process.on('uncaughtException', (err) => {
+  try { console.error('Uncaught Exception:', err && (err.stack || err)) } catch (e) {}
+})
+
 const app = express()
 app.use(cors())
 app.use(express.json())
 
 const path = require('path')
+const fs = require('fs')
 const PORT = process.env.PORT || 3000
 const API_KEY = process.env.BINANCE_API_KEY
 const API_SECRET = process.env.BINANCE_API_SECRET
@@ -715,6 +724,29 @@ app.post('/api/futures/order', async (req, res) => {
 // create HTTP server so we can attach a websocket server to the same port
 const http = require('http')
 const server = http.createServer(app)
+
+// If a production build exists, serve it from the backend so the SPA and API share origin.
+try {
+  const distPath = path.join(__dirname, '..', 'dist')
+  console.info('Static distPath ->', distPath)
+  try {
+    const st = fs.statSync(distPath)
+    if (st && st.isDirectory()) {
+      app.use(express.static(distPath))
+      // fallback to index.html for client-side routing
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'))
+      })
+      console.info('Serving static SPA from', distPath)
+    } else {
+      console.warn('Dist path exists but is not a directory:', distPath)
+    }
+  } catch (e) {
+    console.warn('Dist path not found, skipping static serving')
+  }
+} catch (e) {
+  console.warn('Error while attempting to setup static serving', e && e.message)
+}
 
 // create WebSocket server for account deltas
 function startWss() {
