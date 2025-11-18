@@ -52,8 +52,6 @@ export default function App() {
     try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
   })
   const [account, setAccount] = useState(null)
-  const [sseStatus, setSseStatus] = useState('disconnected')
-  const [lastSseAt, setLastSseAt] = useState(null)
   const [wsStatus, setWsStatus] = useState('disconnected')
   const [lastWsAt, setLastWsAt] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
@@ -123,139 +121,11 @@ export default function App() {
     return acc
   }, [account, lastPrice, symbol])
 
-  // Poll backend for Binance Futures account info (requires server running and .env set)
-  useEffect(() => {
-    let mounted = true
-    let es = null
-    let reconnectTimer = null
-    let backoffMs = 1000
-    const MAX_BACKOFF = 30000
+  // Removed SSE and polling: rely on WebSocket `/ws/account` for all account snapshots and deltas
 
-    // prefer a single absolute backend URL so production static server won't receive relative /api requests
-    const BACKEND_BASE = 'http://127.0.0.1:3000'
-    const sseUrls = [
-      `${BACKEND_BASE}/api/futures/sse`
-    ]
-
-    const connectSse = (urlIndex = 0) => {
-      if (!mounted) return
-      const url = sseUrls[urlIndex]
-      try {
-        setSseStatus('connecting')
-        es = new EventSource(url)
-      } catch (err) {
-        // try next URL
-        if (urlIndex + 1 < sseUrls.length) {
-          connectSse(urlIndex + 1)
-        } else {
-          scheduleReconnect()
-        }
-        return
-      }
-
-      es.onopen = () => {
-        backoffMs = 1000
-        setSseStatus('connected')
-        console.info('SSE connected', url, new Date().toISOString())
-      }
-
-      es.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data)
-          if (!mounted) return
-          if (data) {
-            setLastSseAt(new Date().toISOString())
-            setAccount(data)
-            if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-              try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-              setFuturesBalanceStr(String(data.totalWalletBalance))
-            }
-            if (Array.isArray(data.positions) && symbol) {
-              const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-              if (p) {
-                const amt = Number(p.positionAmt) || 0
-                try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-                setHoldingsStr(String(amt))
-              }
-            }
-          }
-        } catch (e) { /* ignore malformed message */ }
-      }
-
-      es.onerror = (err) => {
-        console.warn('SSE error', err)
-        setSseStatus('error')
-        try { es.close() } catch (e) {}
-        es = null
-        scheduleReconnect()
-      }
-    }
-
-    const scheduleReconnect = () => {
-      if (!mounted) return
-      setSseStatus('reconnecting')
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      reconnectTimer = setTimeout(() => {
-        // rotate URL each attempt to prefer local absolute then relative
-        try {
-          const nextIndex = Math.floor(Math.random() * sseUrls.length)
-          connectSse(nextIndex)
-        } finally {
-          backoffMs = Math.min(MAX_BACKOFF, backoffMs * 1.6)
-        }
-      }, backoffMs)
-    }
-
-    // initial connect
-    connectSse(0)
-
-    const backendUrls = [
-      `${BACKEND_BASE}/api/futures/account`
-    ]
-    const fetchAccount = async () => {
-      for (const url of backendUrls) {
-        try {
-          const resp = await fetch(url)
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-          const data = await resp.json()
-          if (!mounted) return
-          if (data) {
-            setAccount(data)
-            if (typeof data.totalWalletBalance !== 'undefined' && data.totalWalletBalance !== null) {
-              try { localStorage.setItem('futuresBalance', String(data.totalWalletBalance)) } catch (e) {}
-              setFuturesBalanceStr(String(data.totalWalletBalance))
-            }
-            if (Array.isArray(data.positions) && symbol) {
-              const p = data.positions.find(x => x.symbol === String(symbol).toUpperCase())
-              if (p) {
-                const amt = Number(p.positionAmt) || 0
-                try { localStorage.setItem('holdings', String(amt)) } catch (e) {}
-                setHoldingsStr(String(amt))
-              }
-            }
-          }
-          return
-        } catch (err) {
-          // try next url
-        }
-      }
-    }
-
-    fetchAccount()
-    const id = setInterval(fetchAccount, 3000)
-
-    return () => {
-      mounted = false
-      clearInterval(id)
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      try { if (es) es.close() } catch (e) {}
-    }
-  }, [symbol])
-
-    // expose SSE status in the UI (simple indicator)
+    // expose WS status in the UI (simple indicator)
     const SseIndicator = () => (
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginLeft: 8 }}>
-        <ConnectionBadge label="SSE" status={sseStatus} ts={lastSseAt} />
         <ConnectionBadge label="WS" status={wsStatus} ts={lastWsAt} />
       </div>
     )
