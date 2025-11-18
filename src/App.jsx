@@ -374,11 +374,17 @@ export default function App() {
                         const initMargin = Number(p.positionInitialMargin || 0) || 0
                         const lev = p.leverage ? Number(p.leverage) : undefined
                         const side = amt > 0 ? 'LONG' : 'SHORT'
-                        const notional = (Math.abs(amt) * entry) || 0
+                        // Use mark price when available to compute notional and ROI —
+                        // this makes the displayed ROI reflect current PNL / used margin.
+                        const markPrice = Number(p.markPrice || 0) || 0
+                        const priceForNotional = markPrice || entry || Number(price) || 0
+                        const notional = (Math.abs(amt) * priceForNotional) || 0
                         let roiPct = null
                         if (initMargin && initMargin > 0) {
+                          // If the exchange provides the initial margin for the position, use it.
                           roiPct = (upl / initMargin) * 100
-                        } else if (lev && entry && Math.abs(amt) > 0) {
+                        } else if (lev && priceForNotional && Math.abs(amt) > 0) {
+                          // Fallback: estimate used margin from notional / leverage.
                           const usedMargin = notional / lev
                           if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
                         }
