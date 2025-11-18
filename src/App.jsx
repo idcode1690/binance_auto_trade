@@ -358,6 +358,8 @@ export default function App() {
   // Polling fallback: if WS updates are stale, fetch a fresh account snapshot periodically
   useEffect(() => {
     let pollTimer = null
+    let mounted = true
+
     const fetchSnapshot = async () => {
       try {
         const resp = await fetch('/api/futures/account')
@@ -380,6 +382,8 @@ export default function App() {
     }
 
     const start = () => {
+      // run an immediate fetch so UI gets synced on mount
+      fetchSnapshot().catch(() => {})
       // run every 3000ms to keep UI snappy
       pollTimer = setInterval(() => {
         try {
@@ -392,7 +396,7 @@ export default function App() {
     }
 
     start()
-    return () => { if (pollTimer) clearInterval(pollTimer) }
+    return () => { mounted = false; if (pollTimer) clearInterval(pollTimer) }
   }, [symbol, lastWsAt])
 
   return (
