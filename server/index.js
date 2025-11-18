@@ -909,8 +909,9 @@ try {
     const st = fs.statSync(distPath)
     if (st && st.isDirectory()) {
       app.use(express.static(distPath))
-      // fallback to index.html for client-side routing
+      // fallback to index.html for client-side routing — but do not override API routes
       app.get('*', (req, res) => {
+        if (req.path && String(req.path).startsWith('/api')) return res.status(404).end()
         res.sendFile(path.join(distPath, 'index.html'))
       })
       console.info('Serving static SPA from', distPath)
@@ -956,6 +957,7 @@ server.listen(PORT, () => {
     app.use(express.static(distPath))
     // fallback to index.html for client-side routing
     app.get('*', (req, res) => {
+      if (req.path && String(req.path).startsWith('/api')) return res.status(404).end()
       res.sendFile(path.join(distPath, 'index.html'))
     })
   } catch (e) {
