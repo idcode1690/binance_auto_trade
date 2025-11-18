@@ -35,6 +35,24 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     async function load() {
       setIsLoading(true)
       try {
+        // Try localStorage cache first to avoid repeat REST calls for the same
+        // symbol/interval/limit. Cache key includes limit so different views don't clash.
+        const cacheKey = `klines:${String(symbol).toUpperCase()}:${interval}:L${limit}`
+        const TTL_MS = 1000 * 60 * 5 // 5 minutes
+        try {
+          const raw = localStorage.getItem(cacheKey)
+          if (raw) {
+            const parsedCache = JSON.parse(raw)
+            if (parsedCache && Array.isArray(parsedCache.data) && parsedCache.ts && (Date.now() - parsedCache.ts) < TTL_MS) {
+              setKlines(parsedCache.data)
+              setIsLoading(false)
+              return
+            }
+          }
+        } catch (e) {
+          // ignore localStorage parse errors
+        }
+
         const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
         const res = await fetch(url)
         const data = await res.json()
@@ -48,6 +66,10 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
         }))
         if (cancelled) return
         setKlines(parsed)
+        // store to cache for subsequent mounts
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: parsed }))
+        } catch (e) {}
         setIsLoading(false)
       } catch (err) {
         console.warn('fetch klines failed', err)
