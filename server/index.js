@@ -8,6 +8,7 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+const path = require('path')
 const PORT = process.env.PORT || 3000
 const API_KEY = process.env.BINANCE_API_KEY
 const API_SECRET = process.env.BINANCE_API_SECRET
@@ -20,6 +21,24 @@ const FUTURES_API_BASE = process.env.BINANCE_FUTURES_API_BASE || (USE_TESTNET ? 
 const FUTURES_WS_BASE = process.env.BINANCE_FUTURES_WS_BASE || (USE_TESTNET ? 'wss://stream.binancefuture.com' : 'wss://fstream.binance.com')
 const WebSocketClient = require('ws')
 const { WebSocketServer } = require('ws')
+
+// Rate limiting / polling configuration (tuneable via env)
+const BINANCE_MIN_INTERVAL_MS = Number(process.env.BINANCE_MIN_INTERVAL_MS) || 250 // minimum ms between Binance HTTP requests (default 250ms -> ~4 req/s)
+const BINANCE_POLL_INTERVAL_MS = Number(process.env.BINANCE_POLL_INTERVAL_MS) || 30000 // account poll interval when WS unavailable (default 30s)
+
+// Simple serialized request pacing to avoid bursts hitting Binance rate limits
+let _binanceLastReqTs = 0
+async function binanceRequest(url, opts = {}) {
+  const now = Date.now()
+  const since = now - _binanceLastReqTs
+  const wait = Math.max(0, BINANCE_MIN_INTERVAL_MS - since)
+  if (wait > 0) await new Promise(r => setTimeout(r, wait))
+  _binanceLastReqTs = Date.now()
+  return axios(Object.assign({ url }, opts))
+}
+
+// track if Binance has issued an IP ban (418 / -1003). If set, skip polling until ban expires.
+let binanceBanUntilMs = 0
 
 // WS clients (for fast account/position deltas)
 let wss = null
@@ -161,11 +180,24 @@ async function signedGet(path, params = {}) {
   const signature = sign(q)
   const url = `${base}${path}?${q}&signature=${signature}`
   try {
-    const res = await axios.get(url, { headers: { 'X-MBX-APIKEY': API_KEY } })
+    const res = await binanceRequest(url, { method: 'get', headers: { 'X-MBX-APIKEY': API_KEY } })
     return res.data
   } catch (err) {
     // if Binance complains about timestamp, try syncing server time once and retry
     const remote = err && err.response
+    // detect IP-ban message and set banUntil to avoid busy retry loops
+    try {
+      if (remote && remote.status === 418 && remote.data && typeof remote.data.msg === 'string') {
+        const m = String(remote.data.msg).match(/(\d{10,})/)
+        if (m && m[1]) {
+          const bannedUntil = Number(m[1])
+          if (isFinite(bannedUntil) && bannedUntil > Date.now()) {
+            binanceBanUntilMs = bannedUntil
+            console.warn('Binance reported IP ban until', new Date(binanceBanUntilMs).toISOString())
+          }
+        }
+      }
+    } catch (e) {}
     if (remote && remote.data && remote.data.code === -1021) {
       await syncServerTimeOnce()
       try {
@@ -173,7 +205,7 @@ async function signedGet(path, params = {}) {
         const q2 = new URLSearchParams({ ...params, timestamp: String(ts2) }).toString()
         const signature2 = sign(q2)
         const url2 = `${base}${path}?${q2}&signature=${signature2}`
-        const res2 = await axios.get(url2, { headers: { 'X-MBX-APIKEY': API_KEY } })
+        const res2 = await binanceRequest(url2, { method: 'get', headers: { 'X-MBX-APIKEY': API_KEY } })
         return res2.data
       } catch (e2) {
         throw e2
@@ -209,8 +241,8 @@ async function getExchangeInfoForSymbol(sym) {
   }
   try {
     const url = `${FUTURES_API_BASE}/fapi/v1/exchangeInfo?symbol=${s}`
-    const resp = await axios.get(url)
-    const info = resp.data && resp.data.symbols && resp.data.symbols[0] ? resp.data.symbols[0] : null
+    const resp = await binanceRequest(url, { method: 'get' })
+    const info = resp && resp.data && resp.data.symbols && resp.data.symbols[0] ? resp.data.symbols[0] : null
     if (info) exchangeCache.set(s, { ts: now, info })
     return info
   } catch (err) {
@@ -267,12 +299,19 @@ app.get('/api/futures/account', async (req, res) => {
     try {
       const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
       if (syms.length) {
-        const promises = syms.map(s => axios.get(`${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`).then(r => ({ symbol: s, data: r.data })).catch(() => null))
+        // pace premiumIndex requests through binanceRequest; cache briefly within this function to avoid per-fetch bursts
+        const premiumCache = new Map()
+        const promises = syms.map(async s => {
+          try {
+            const url = `${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`
+            const resp = await binanceRequest(url, { method: 'get' })
+            const data = resp && resp.data ? resp.data : null
+            return { symbol: s, data }
+          } catch (e) { return null }
+        })
         const results = await Promise.all(promises)
         const map = new Map()
-        for (const r of results) {
-          if (r && r.data) map.set(r.symbol, r.data)
-        }
+        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
         out.positions = out.positions.map(p => {
           const info = map.get(p.symbol)
           if (info) {
@@ -355,6 +394,12 @@ function broadcastAccountUpdate(obj) {
 let accountPollInterval = null
 async function pollAccountSnapshotOnce() {
   if (!API_KEY || !API_SECRET) return
+  // respect Binance ban-until if present
+  if (binanceBanUntilMs && Date.now() < binanceBanUntilMs) {
+    // skip polling while banned
+    console.warn('Skipping account poll due to Binance ban until', new Date(binanceBanUntilMs).toISOString())
+    return
+  }
   try {
     const d = await signedGet('/fapi/v2/account')
     const out = {
@@ -391,13 +436,26 @@ async function pollAccountSnapshotOnce() {
   } catch (e) {
     // keep quiet — failures are expected if keys are invalid or network issues occur
     // but log minimally for debugging
-    // console.warn('pollAccountSnapshotOnce failed', e && e.message)
+    try {
+      const remote = e && e.response
+      if (remote && remote.status === 418 && remote.data && typeof remote.data.msg === 'string') {
+        const m = String(remote.data.msg).match(/(\d{10,})/)
+        if (m && m[1]) {
+          const bannedUntil = Number(m[1])
+          if (isFinite(bannedUntil) && bannedUntil > Date.now()) {
+            binanceBanUntilMs = bannedUntil
+            console.warn('Binance reported IP ban during pollAccountSnapshotOnce until', new Date(binanceBanUntilMs).toISOString())
+          }
+        }
+      }
+    } catch (ee) {}
+    console.warn('pollAccountSnapshotOnce failed', e && e.message)
   }
 }
 
 function startAccountPolling() {
   if (accountPollInterval) return
-  accountPollInterval = setInterval(() => pollAccountSnapshotOnce(), 3000)
+  accountPollInterval = setInterval(() => pollAccountSnapshotOnce(), BINANCE_POLL_INTERVAL_MS)
   // run immediately once
   pollAccountSnapshotOnce()
 }
@@ -414,7 +472,7 @@ async function startUserDataStream() {
   try {
     // create listen key
     const url = `${FUTURES_API_BASE}/fapi/v1/listenKey`
-    const resp = await axios.post(url, null, { headers: { 'X-MBX-APIKEY': API_KEY } })
+    const resp = await binanceRequest(url, { method: 'post', headers: { 'X-MBX-APIKEY': API_KEY } })
     if (!resp) {
       console.warn('listenKey creation returned no response', url)
       return
@@ -486,10 +544,16 @@ async function startUserDataStream() {
             try {
               const syms = Array.from(new Set(out.positions.map(p => p.symbol).filter(Boolean)))
               if (syms.length) {
-                const promises = syms.map(s => axios.get(`${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`).then(r => ({ symbol: s, data: r.data })).catch(() => null))
-                const results = await Promise.all(promises)
-                const map = new Map()
-                for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
+                        const promises = syms.map(async s => {
+                          try {
+                            const url = `${FUTURES_API_BASE}/fapi/v1/premiumIndex?symbol=${s}`
+                            const r = await binanceRequest(url, { method: 'get' })
+                            return { symbol: s, data: r && r.data ? r.data : null }
+                          } catch (e) { return null }
+                        })
+                        const results = await Promise.all(promises)
+                        const map = new Map()
+                        for (const r of results) if (r && r.data) map.set(r.symbol, r.data)
                 out.positions = out.positions.map(p => {
                   const info = map.get(p.symbol)
                   if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
@@ -677,6 +741,19 @@ function broadcastWs(obj) {
 }
 
 server.listen(PORT, () => {
+  // If a production build exists, serve it from the backend so the SPA and API share origin.
+  try {
+    const distPath = path.join(__dirname, '..', 'dist')
+    // serve static assets (placed after API routes so /api/* remains handled above)
+    app.use(express.static(distPath))
+    // fallback to index.html for client-side routing
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'))
+    })
+  } catch (e) {
+    // ignore if dist not present
+  }
+
   console.log(`Futures proxy server listening on http://localhost:${PORT}`)
   startWss()
 })
