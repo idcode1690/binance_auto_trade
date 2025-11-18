@@ -51,6 +51,8 @@ export default function App() {
   const [account, setAccount] = useState(null)
   const [sseStatus, setSseStatus] = useState('disconnected')
   const [lastSseAt, setLastSseAt] = useState(null)
+  const [wsStatus, setWsStatus] = useState('disconnected')
+  const [lastWsAt, setLastWsAt] = useState(null)
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
   })
@@ -249,10 +251,17 @@ export default function App() {
 
     // expose SSE status in the UI (simple indicator)
     const SseIndicator = () => (
-      <div style={{ fontSize: 12, marginLeft: 8 }}>
-        <span style={{ opacity: 0.7 }}>SSE:</span>
-        <span style={{ marginLeft: 6, fontWeight: 600, color: sseStatus === 'connected' ? '#16a34a' : sseStatus === 'error' ? '#dc2626' : '#666' }}>{sseStatus}</span>
-        {lastSseAt ? <span style={{ marginLeft: 8, opacity: 0.7 }}>last {new Date(lastSseAt).toLocaleTimeString()}</span> : null}
+      <div style={{ fontSize: 12, marginLeft: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ opacity: 0.7 }}>SSE:</span>
+          <span style={{ fontWeight: 600, color: sseStatus === 'connected' ? '#16a34a' : sseStatus === 'error' ? '#dc2626' : '#666' }}>{sseStatus}</span>
+          {lastSseAt ? <span style={{ marginLeft: 6, opacity: 0.7 }}>last {new Date(lastSseAt).toLocaleTimeString()}</span> : null}
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ opacity: 0.7 }}>WS:</span>
+          <span style={{ fontWeight: 600, color: wsStatus === 'connected' ? '#16a34a' : wsStatus === 'error' ? '#dc2626' : '#666' }}>{wsStatus}</span>
+          {lastWsAt ? <span style={{ marginLeft: 6, opacity: 0.7 }}>last {new Date(lastWsAt).toLocaleTimeString()}</span> : null}
+        </div>
       </div>
     )
 
@@ -260,6 +269,127 @@ export default function App() {
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
+
+  // WebSocket consumer for low-latency account/position deltas from server
+  useEffect(() => {
+    let mounted = true
+    let ws = null
+    let reconnectTimer = null
+    let backoffMs = 500
+    const MAX_BACKOFF = 30000
+
+    const wsUrls = [
+      'ws://127.0.0.1:3000/ws/account',
+      `ws://${window.location.host}/ws/account`,
+      '/ws/account'
+    ]
+
+    const connect = (idx = 0) => {
+      if (!mounted) return
+      const url = wsUrls[idx]
+      try {
+        setWsStatus('connecting')
+        // prefer absolute then relative
+        ws = new WebSocket(url)
+        wsRef.current = ws
+      } catch (e) {
+        scheduleReconnect()
+        return
+      }
+
+      ws.onopen = () => {
+        backoffMs = 500
+        setWsStatus('connected')
+        setLastWsAt(new Date().toISOString())
+        console.info('Account WS connected', url)
+      }
+
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data)
+          if (!mounted) return
+          setLastWsAt(new Date().toISOString())
+          if (!msg) return
+          // handle positional delta
+          if (msg.type === 'pos_delta') {
+            const pos = msg.position || msg.pos || msg.data
+            if (!pos || !pos.symbol) return
+            setAccount(prev => {
+              const acc = prev ? { ...prev } : { positions: [] }
+              const sym = String(pos.symbol).toUpperCase()
+              acc.positions = Array.isArray(acc.positions) ? acc.positions.slice() : []
+              const idx = acc.positions.findIndex(p => String(p.symbol).toUpperCase() === sym)
+              if (idx >= 0) {
+                acc.positions[idx] = { ...acc.positions[idx], ...pos }
+              } else {
+                acc.positions.push({ ...pos })
+              }
+              // if this is the currently selected symbol, persist holdings
+              if (sym === String(symbol).toUpperCase()) {
+                try { const amt = String(Number(pos.positionAmt) || 0); localStorage.setItem('holdings', amt); setHoldingsStr(amt) } catch (e) {}
+              }
+              return acc
+            })
+          } else if (msg.type === 'acct_delta') {
+            const totals = msg.totals || msg.data || {}
+            setAccount(prev => {
+              const acc = prev ? { ...prev } : { positions: [] }
+              if (typeof totals.totalUnrealizedProfit !== 'undefined') acc.totalUnrealizedProfit = totals.totalUnrealizedProfit
+              if (typeof totals.totalWalletBalance !== 'undefined') acc.totalWalletBalance = totals.totalWalletBalance
+              return acc
+            })
+            if (typeof totals.totalWalletBalance !== 'undefined') {
+              try { localStorage.setItem('futuresBalance', String(totals.totalWalletBalance)); setFuturesBalanceStr(String(totals.totalWalletBalance)) } catch (e) {}
+            }
+          } else if (msg.type === 'snapshot' || msg.type === 'full_snapshot' || msg.type === 'account_snapshot') {
+            // server may send full snapshot occasionally
+            const snap = msg.snapshot || msg.data || msg.account
+            if (snap) setAccount(snap)
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+
+      ws.onclose = (e) => {
+        setWsStatus('disconnected')
+        wsRef.current = null
+        if (!mounted) return
+        scheduleReconnect()
+      }
+
+      ws.onerror = (err) => {
+        console.warn('Account WS error', err)
+        setWsStatus('error')
+        try { ws.close() } catch (e) {}
+        wsRef.current = null
+        scheduleReconnect()
+      }
+    }
+
+    const scheduleReconnect = () => {
+      if (!mounted) return
+      setWsStatus('reconnecting')
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      reconnectTimer = setTimeout(() => {
+        try {
+          const next = Math.floor(Math.random() * wsUrls.length)
+          connect(next)
+        } finally {
+          backoffMs = Math.min(MAX_BACKOFF, backoffMs * 1.6)
+        }
+      }, backoffMs)
+    }
+
+    connect(0)
+
+    return () => {
+      mounted = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      try { if (ws) ws.close() } catch (e) {}
+      wsRef.current = null
+    }
+  }, [symbol])
 
   return (
     <div className="container body-root">
