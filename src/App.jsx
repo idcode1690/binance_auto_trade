@@ -399,68 +399,72 @@ export default function App() {
               {/* Positions table under chart */}
               <div style={{marginTop:12}}>
                 <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Open Positions</div>
-                {derivedAccount && Array.isArray(derivedAccount.positions) ? (
-                  (() => {
-                    const open = derivedAccount.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
-                    if (!open.length) return (<div style={{fontSize:12,color:'var(--muted)'}}>No open positions</div>)
-                    return (
-                      <div style={{display:'flex',flexWrap:'wrap',gap:12}}>
-                        {open.map(p => {
-                          const amt = Number(p.positionAmt) || 0
-                          const entry = Number(p.entryPrice) || 0
-                          const upl = Number(p.unrealizedProfit) || 0
-                          const initMargin = Number(p.positionInitialMargin || 0) || 0
-                          const lev = p.leverage ? Number(p.leverage) : undefined
-                          const side = amt > 0 ? 'LONG' : 'SHORT'
-                          const notional = (Math.abs(amt) * entry) || 0
-                          let roiPct = null
-                          if (initMargin && initMargin > 0) {
-                            roiPct = (upl / initMargin) * 100
-                          } else if (lev && entry && Math.abs(amt) > 0) {
-                            const usedMargin = notional / lev
-                            if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
-                          }
-                          const isPos = upl >= 0
-                          const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
-                          return (
-                            <div key={p.symbol + String(p.positionAmt)} className="position-card" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:8,padding:12,minWidth:260,flex:'1 0 320px',boxShadow:'0 1px 2px rgba(0,0,0,0.02)',background:'#fff'}}>
-                              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-                                <div style={{fontWeight:700}}>{p.symbol}</div>
-                                <div style={{fontSize:12,color:'var(--muted)'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? 'Isolated' : 'Cross') : 'Cross'}</div>
+                <div style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,padding:12,background:'transparent'}}>
+                  {derivedAccount && Array.isArray(derivedAccount.positions) ? (
+                    (() => {
+                      const open = derivedAccount.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
+                      if (!open.length) return (
+                        <div style={{padding:24,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)'}}>No open positions</div>
+                      )
+                      return (
+                        <div style={{display:'flex',flexWrap:'wrap',gap:12}}>
+                          {open.map(p => {
+                            const amt = Number(p.positionAmt) || 0
+                            const entry = Number(p.entryPrice) || 0
+                            const upl = Number(p.unrealizedProfit) || 0
+                            const initMargin = Number(p.positionInitialMargin || 0) || 0
+                            const lev = p.leverage ? Number(p.leverage) : undefined
+                            const side = amt > 0 ? 'LONG' : 'SHORT'
+                            const notional = (Math.abs(amt) * entry) || 0
+                            let roiPct = null
+                            if (initMargin && initMargin > 0) {
+                              roiPct = (upl / initMargin) * 100
+                            } else if (lev && entry && Math.abs(amt) > 0) {
+                              const usedMargin = notional / lev
+                              if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
+                            }
+                            const isPos = upl >= 0
+                            const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
+                            return (
+                              <div key={p.symbol + String(p.positionAmt)} className="position-card" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:8,padding:12,minWidth:260,flex:'1 0 320px',boxShadow:'0 1px 2px rgba(0,0,0,0.02)',background:'#fff'}}>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                                  <div style={{fontWeight:700}}>{p.symbol}</div>
+                                  <div style={{fontSize:12,color:'var(--muted)'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? 'Isolated' : 'Cross') : 'Cross'}</div>
+                                </div>
+                                <div style={{display:'flex',gap:12,alignItems:'center'}}>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:12,color:'var(--muted)'}}>Side</div>
+                                    <div style={{fontWeight:700}}>{side} {Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
+                                  </div>
+                                  <div style={{flex:1,textAlign:'right'}}>
+                                    <div style={{fontSize:12,color:'var(--muted)'}}>Entry</div>
+                                    <div>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                                  </div>
+                                </div>
+                                <div style={{display:'flex',justifyContent:'space-between',marginTop:10,alignItems:'center'}}>
+                                  <div>
+                                    <div style={{fontSize:12,color:'var(--muted)'}}>Leverage</div>
+                                    <div>{lev || '—'}</div>
+                                  </div>
+                                  <div style={{textAlign:'right'}}>
+                                    <div style={{fontSize:12,color:'var(--muted)'}}>Margin</div>
+                                    <div>{initMargin ? `${initMargin.toFixed(4)} USDT` : '—'}</div>
+                                  </div>
+                                  <div style={{textAlign:'right'}}>
+                                    <div style={{fontSize:12,color:'var(--muted)'}}>PNL</div>
+                                    <div className={pnlClass} style={{fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT {roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : ''}</div>
+                                  </div>
+                                </div>
                               </div>
-                              <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                                <div style={{flex:1}}>
-                                  <div style={{fontSize:12,color:'var(--muted)'}}>Side</div>
-                                  <div style={{fontWeight:700}}>{side} {Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
-                                </div>
-                                <div style={{flex:1,textAlign:'right'}}>
-                                  <div style={{fontSize:12,color:'var(--muted)'}}>Entry</div>
-                                  <div>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
-                                </div>
-                              </div>
-                              <div style={{display:'flex',justifyContent:'space-between',marginTop:10,alignItems:'center'}}>
-                                <div>
-                                  <div style={{fontSize:12,color:'var(--muted)'}}>Leverage</div>
-                                  <div>{lev || '—'}</div>
-                                </div>
-                                <div style={{textAlign:'right'}}>
-                                  <div style={{fontSize:12,color:'var(--muted)'}}>Margin</div>
-                                  <div>{initMargin ? `${initMargin.toFixed(4)} USDT` : '—'}</div>
-                                </div>
-                                <div style={{textAlign:'right'}}>
-                                  <div style={{fontSize:12,color:'var(--muted)'}}>PNL</div>
-                                  <div className={pnlClass} style={{fontWeight:700}}>{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT {roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : ''}</div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })()
-                ) : (
-                  <div style={{fontSize:12,color:'var(--muted)'}}>Positions not available</div>
-                )}
+                            )
+                          })}
+                        </div>
+                      )
+                    })()
+                  ) : (
+                    <div style={{padding:12,fontSize:12,color:'var(--muted)'}}>Positions not available</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
