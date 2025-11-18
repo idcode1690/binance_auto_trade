@@ -287,6 +287,14 @@ export default function App() {
             <div className="upl-label">Unrealized P/L</div>
           </div>
         </div>
+          <div className="account-row account-bottom">
+            <div className="account-sub">Margin Balance</div>
+            <div className="account-balance">
+              {account && (typeof account.totalMarginBalance !== 'undefined' || typeof account.availableBalance !== 'undefined')
+                ? formatPrice(Number(account.totalMarginBalance ?? account.availableBalance))
+                : '—'}
+            </div>
+          </div>
       </div>
     )
   }
