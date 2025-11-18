@@ -575,7 +575,7 @@ export default function App() {
               <h3 style={{marginTop:0, marginBottom:0}}>Futures Account</h3>
             </div>
             <div className="meta">
-              <AccountSummary account={account} />
+              <AccountSummary account={derivedAccount || account} />
             </div>
 
             <div style={{marginTop:12}}>
