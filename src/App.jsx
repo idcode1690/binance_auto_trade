@@ -281,7 +281,7 @@ export default function App() {
           <div className="account-balance">{formatPrice(bal)}</div>
         </div>
         <div className="account-row account-bottom">
-          <div className="account-sub">Binance Futures wallet</div>
+          <div className="account-sub">Futures wallet</div>
           <div className="account-upl">
             <div className={"upl-amount " + (uplPos ? 'pos' : 'neg')}>{upl >= 0 ? '+' : ''}{formatPrice(upl)} USDT</div>
             <div className="upl-label">Unrealized P/L</div>
