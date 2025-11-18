@@ -352,9 +352,7 @@ export default function App() {
             </div>
 
             
-
             </div>
-          </div>
         </section>
 
         <section className="positions card">
