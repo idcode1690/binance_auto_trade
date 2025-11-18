@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, Suspense } from 'react'
+import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react'
 
 /*
   Redesigned front-end: Minimal, responsive dashboard shell.
@@ -87,6 +87,36 @@ export default function App() {
   const value = isFinite(Number(lastPrice)) ? holdings * Number(lastPrice) : null
   const change = ''
   const candles = 0
+
+  // derive a quick client-side account snapshot using live price for snappy PNL updates
+  const derivedAccount = useMemo(() => {
+    if (!account) return null
+    // shallow clone
+    const acc = { ...account }
+    let delta = 0
+    if (Array.isArray(account.positions) && lastPrice != null && isFinite(Number(lastPrice))) {
+      acc.positions = account.positions.map(p => {
+        try {
+          if (!p || !p.symbol) return p
+          if (String(p.symbol).toUpperCase() === String(symbol).toUpperCase()) {
+            const amt = Number(p.positionAmt) || 0
+            if (Math.abs(amt) === 0) return p
+            const entry = Number(p.entryPrice) || 0
+            const newUpl = (Number(lastPrice) - entry) * amt
+            const oldUpl = Number(p.unrealizedProfit) || 0
+            delta += (newUpl - oldUpl)
+            return { ...p, unrealizedProfit: newUpl }
+          }
+        } catch (e) {}
+        return p
+      })
+    } else {
+      acc.positions = account.positions
+    }
+    acc.totalUnrealizedProfit = (Number(account.totalUnrealizedProfit) || 0) + delta
+    acc.totalWalletBalance = (Number(account.totalWalletBalance) || 0) + delta
+    return acc
+  }, [account, lastPrice, symbol])
 
   // Poll backend for Binance Futures account info (requires server running and .env set)
   useEffect(() => {
@@ -293,9 +323,9 @@ export default function App() {
               {/* Positions table under chart */}
               <div style={{marginTop:12}}>
                 <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Open Positions</div>
-                {account && Array.isArray(account.positions) ? (
+                {derivedAccount && Array.isArray(derivedAccount.positions) ? (
                   (() => {
-                    const open = account.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
+                    const open = derivedAccount.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
                     if (!open.length) return (<div style={{fontSize:12,color:'var(--muted)'}}>No open positions</div>)
                     return (
                       <div className="positions-table" style={{border:'1px solid rgba(0,0,0,0.06)',borderRadius:6,overflow:'hidden'}}>
