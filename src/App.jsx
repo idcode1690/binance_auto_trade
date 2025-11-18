@@ -417,22 +417,38 @@ export default function App() {
                         {open.map(p => {
                           const amt = Number(p.positionAmt) || 0
                           const entry = Number(p.entryPrice) || 0
-                          const upl = Number(p.unrealizedProfit) || 0
-                          const initMargin = Number(p.positionInitialMargin || 0) || 0
+                          // prefer server-provided markPrice, then lastPrice, then entry
+                          const mark = Number(p.markPrice) || Number(lastPrice) || entry || 0
+
+                          // compute unrealized PnL using mark price (more consistent with Binance)
+                          const computedUpl = (mark - entry) * amt
+                          // prefer explicit server-provided unrealizedProfit if present
+                          const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : computedUpl
+
+                          // prefer explicit initial margin fields when available
+                          const initMargin = Number(p.positionInitialMargin || p.initialMargin || 0) || 0
                           const lev = p.leverage ? Number(p.leverage) : undefined
-                          const side = amt > 0 ? 'LONG' : 'SHORT'
-                          const notional = (Math.abs(amt) * entry) || 0
+                          // compute notional using mark price (closer to Binance's view)
+                          const notional = (Math.abs(amt) * mark) || 0
+
                           let roiPct = null
                           if (initMargin && initMargin > 0) {
                             roiPct = (upl / initMargin) * 100
-                          } else if (lev && entry && Math.abs(amt) > 0) {
+                          } else if (lev && notional > 0) {
                             const usedMargin = notional / lev
                             if (usedMargin > 0) roiPct = (upl / usedMargin) * 100
+                          } else if (lev && entry && Math.abs(amt) > 0) {
+                            // last resort: estimate used margin from entry price if mark not available
+                            const fallbackNotional = Math.abs(amt) * entry
+                            const used = fallbackNotional / (lev || 1)
+                            if (used > 0) roiPct = (upl / used) * 100
                           }
+
                           const isPos = upl >= 0
                           const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
+                          // display values: show markPrice for live consistency
                           return (
-                            <div key={p.symbol} style={{display:'flex',gap:12,padding:'8px 6px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
+                            <div key={p.symbol + String(p.positionAmt) + String(p.entryPrice)} style={{display:'flex',gap:12,padding:'8px 6px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
                               <div style={{flex:1.2}}>{p.symbol}</div>
                               <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
                               <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
@@ -446,8 +462,8 @@ export default function App() {
                                 ) : '—'}
                               </div>
                               <div className={"pnl-cell " + pnlClass} style={{flex:1,textAlign:'right'}}>
-                                <div className="pnl-amount">{upl >= 0 ? '+' : ''}{upl.toFixed(4)} USDT</div>
-                                <div className="pnl-percent">{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)` : '(—)'}</div>
+                                <div className="pnl-amount">{upl >= 0 ? '+' : ''}{Number(upl || 0).toFixed(4)} USDT</div>
+                                <div className="pnl-percent">{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${Number(roiPct).toFixed(2)}%)` : '(—)'}</div>
                               </div>
                               <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
                             </div>
