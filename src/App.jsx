@@ -85,6 +85,9 @@ export default function App() {
     else maxDigits = 2
     return n.toLocaleString(undefined, { maximumFractionDigits: maxDigits })
   }
+  const normalizeSym = (s) => {
+    try { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '') } catch (e) { return String(s || '').toUpperCase() }
+  }
   const price = formatPrice(lastPrice)
   const holdings = Number(holdingsStr) || 0
   const value = isFinite(Number(lastPrice)) ? holdings * Number(lastPrice) : null
@@ -101,7 +104,7 @@ export default function App() {
       acc.positions = account.positions.map(p => {
         try {
           if (!p || !p.symbol) return p
-          if (String(p.symbol).toUpperCase() === String(symbol).toUpperCase()) {
+            if (normalizeSym(p.symbol) === normalizeSym(symbol)) {
             const amt = Number(p.positionAmt) || 0
             if (Math.abs(amt) === 0) return p
             const entry = Number(p.entryPrice) || 0
@@ -268,9 +271,9 @@ export default function App() {
             }
             setAccount(prev => {
               const acc = prev ? { ...prev } : { positions: [] }
-              const sym = String(pos.symbol).toUpperCase()
+              const sym = normalizeSym(pos.symbol)
               acc.positions = Array.isArray(acc.positions) ? acc.positions.slice() : []
-              const idx = acc.positions.findIndex(p => String(p.symbol).toUpperCase() === sym)
+              const idx = acc.positions.findIndex(p => normalizeSym(p.symbol) === sym)
               const amtNum = Number(pos.positionAmt) || 0
               if (idx >= 0) {
                 if (Math.abs(amtNum) === 0) {
@@ -285,7 +288,7 @@ export default function App() {
                 }
               }
               // if this is the currently selected symbol, persist holdings (store '0' when closed)
-              if (sym === String(symbol).toUpperCase()) {
+              if (sym === normalizeSym(symbol)) {
                 try { const amt = String(amtNum || 0); localStorage.setItem('holdings', amt); setHoldingsStr(amt) } catch (e) {}
               }
               return acc
@@ -371,7 +374,7 @@ export default function App() {
           // if snapshot includes a markPrice for our selected symbol, update live price
           try {
             if (Array.isArray(data.positions)) {
-              const p = data.positions.find(pp => String(pp.symbol).toUpperCase() === String(symbol).toUpperCase())
+              const p = data.positions.find(pp => normalizeSym(pp.symbol) === normalizeSym(symbol))
               if (p && typeof p.markPrice !== 'undefined' && p.markPrice !== null) setLastPrice(Number(p.markPrice))
             }
           } catch (e) {}
