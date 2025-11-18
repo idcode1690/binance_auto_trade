@@ -782,6 +782,26 @@ app.post('/api/futures/account/seed', async (req, res) => {
       }
     } catch (e) {}
 
+      // try to enrich with positionRisk (leverage, marginType, isolated, positionInitialMargin)
+      try {
+        const pr = await signedGet('/fapi/v2/positionRisk')
+        if (Array.isArray(pr) && pr.length) {
+          const prMap = new Map()
+          for (const r of pr) prMap.set(String(r.symbol || '').toUpperCase(), r)
+          out.positions = out.positions.map(p => {
+            const r = prMap.get(String(p.symbol || '').toUpperCase())
+            if (!r) return p
+            return {
+              ...p,
+              leverage: (typeof r.leverage !== 'undefined' && r.leverage !== null) ? Number(r.leverage) : p.leverage,
+              marginType: (typeof r.marginType !== 'undefined' ? r.marginType : (typeof r.isolated !== 'undefined' ? (r.isolated ? 'ISOLATED' : 'CROSSED') : p.marginType)),
+              isolatedWallet: (typeof r.isolatedWallet !== 'undefined') ? Number(r.isolatedWallet) : (typeof r.isolated !== 'undefined' ? (r.isolated ? Number(r.positionInitialMargin || 0) : undefined) : p.isolatedWallet),
+              positionInitialMargin: (typeof r.positionInitialMargin !== 'undefined' && Number(r.positionInitialMargin)) ? Number(r.positionInitialMargin) : p.positionInitialMargin
+            }
+          })
+        }
+      } catch (e) {}
+
     latestAccountSnapshot = out
     // broadcast to SSE/WS clients
     try { broadcastAccountUpdate(out); broadcastWs({ type: 'snapshot', account: out, ts: Date.now() }) } catch (e) {}
@@ -824,6 +844,25 @@ async function seedAccountSnapshot() {
         const info = map.get(p.symbol)
         if (info) return { ...p, markPrice: Number(info.markPrice || info.price || 0), fundingRate: Number(info.lastFundingRate || 0) }
         return p
+      })
+    }
+  } catch (e) {}
+  // enrich with positionRisk (leverage, marginType, isolated, positionInitialMargin)
+  try {
+    const pr = await signedGet('/fapi/v2/positionRisk')
+    if (Array.isArray(pr) && pr.length) {
+      const prMap = new Map()
+      for (const r of pr) prMap.set(String(r.symbol || '').toUpperCase(), r)
+      out.positions = out.positions.map(p => {
+        const r = prMap.get(String(p.symbol || '').toUpperCase())
+        if (!r) return p
+        return {
+          ...p,
+          leverage: (typeof r.leverage !== 'undefined' && r.leverage !== null) ? Number(r.leverage) : p.leverage,
+          marginType: (typeof r.marginType !== 'undefined' ? r.marginType : (typeof r.isolated !== 'undefined' ? (r.isolated ? 'ISOLATED' : 'CROSSED') : p.marginType)),
+          isolatedWallet: (typeof r.isolatedWallet !== 'undefined') ? Number(r.isolatedWallet) : (typeof r.isolated !== 'undefined' ? (r.isolated ? Number(r.positionInitialMargin || 0) : undefined) : p.isolatedWallet),
+          positionInitialMargin: (typeof r.positionInitialMargin !== 'undefined' && Number(r.positionInitialMargin)) ? Number(r.positionInitialMargin) : p.positionInitialMargin
+        }
       })
     }
   } catch (e) {}
