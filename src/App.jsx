@@ -360,6 +360,46 @@ export default function App() {
     }
   }, [symbol])
 
+  // On mount: attempt a single REST GET to `/api/futures/account` to seed initial data
+  // If no cached snapshot is available, request the manual seed endpoint once.
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const resp = await fetch('/api/futures/account')
+        if (!mounted) return
+        if (resp.status === 202) {
+          // no snapshot yet — try a one-time seed (server-side protects against rate limits)
+          try {
+            const seedResp = await fetch('/api/futures/account/seed', { method: 'POST' })
+            if (!mounted) return
+            if (seedResp.ok) {
+              const j = await seedResp.json()
+              if (j && j.snapshot) {
+                try { setAccount(j.snapshot); if (j.snapshot.totalWalletBalance) { localStorage.setItem('futuresBalance', String(j.snapshot.totalWalletBalance)); setFuturesBalanceStr(String(j.snapshot.totalWalletBalance)) } } catch (e) {}
+              }
+            }
+          } catch (e) {
+            // ignore seed errors — server may be rate-limited or keys may be missing
+            console.warn('seed attempt failed', e && e.message)
+          }
+        } else if (resp.ok) {
+          try {
+            const j = await resp.json()
+            if (!mounted) return
+            if (j) {
+              setAccount(j)
+              if (j.totalWalletBalance) { try { localStorage.setItem('futuresBalance', String(j.totalWalletBalance)); setFuturesBalanceStr(String(j.totalWalletBalance)) } catch (e) {} }
+            }
+          } catch (e) {}
+        }
+      } catch (e) {
+        console.warn('initial account fetch failed', e && e.message)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
   // REST polling removed: client will now rely exclusively on WebSocket
   // account/pos deltas and server-sent 'snapshot' messages. This avoids
   // triggering Binance REST rate limits and IP bans. If a fresh full
