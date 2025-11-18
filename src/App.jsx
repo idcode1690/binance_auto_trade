@@ -54,9 +54,6 @@ export default function App() {
   const [account, setAccount] = useState(null)
   const [wsStatus, setWsStatus] = useState('disconnected')
   const [lastWsAt, setLastWsAt] = useState(null)
-  const [showPosDebug, setShowPosDebug] = useState(() => {
-    try { return localStorage.getItem('showPosDebug') === 'true' } catch (e) { return false }
-  })
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
   })
@@ -451,13 +448,7 @@ export default function App() {
               />
               {/* Positions table under chart */}
               <div style={{marginTop:12}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                  <div style={{fontSize:14,fontWeight:700}}>Open Positions</div>
-                  <label style={{fontSize:12,color:'var(--muted)',display:'flex',alignItems:'center',gap:8}}>
-                    <input type="checkbox" checked={showPosDebug} onChange={e=>{ const v = e.target.checked; setShowPosDebug(v); try{ localStorage.setItem('showPosDebug', v ? 'true' : 'false') } catch(e){} }} />
-                    <span>Show debug</span>
-                  </label>
-                </div>
+                <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Open Positions</div>
                 {derivedAccount && Array.isArray(derivedAccount.positions) ? (
                   (() => {
                     const open = derivedAccount.positions.filter(p => Math.abs(Number(p.positionAmt) || 0) > 0)
@@ -519,7 +510,6 @@ export default function App() {
                           const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
                           // display values: show markPrice for live consistency
                           return (
-                            <>
                             <div key={p.symbol + String(p.positionAmt) + String(p.entryPrice)} style={{display:'flex',gap:12,padding:'8px 6px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
                               <div style={{flex:1.2}}>{p.symbol}</div>
                               <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
@@ -539,15 +529,6 @@ export default function App() {
                               </div>
                               <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
                             </div>
-                            {showPosDebug ? (
-                              <div style={{padding:'8px',background:'rgba(0,0,0,0.02)',fontSize:12,color:'#111',borderTop:'1px solid rgba(0,0,0,0.04)'}}>
-                                <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Debug data</div>
-                                <div style={{whiteSpace:'pre-wrap',fontFamily:'monospace',fontSize:11,color:'#222'}}>
-                                  {`positionAmt: ${String(p.positionAmt)}\nentryPrice: ${String(p.entryPrice)}\nmarkPrice: ${String(p.markPrice)}\nindexPrice: ${String(p.indexPrice || '')}\npositionInitialMargin: ${String(p.positionInitialMargin || p.initialMargin || '')}\nisolatedWallet: ${String(p.isolatedWallet || '')}\nunrealizedProfit(raw): ${String(p.unrealizedProfit)}\ncomputedUpl(mark): ${Number(computedUpl || 0).toFixed(6)}\ncomputedUpl(index): ${Number(computedUplIndex || 0).toFixed(6)}\nusedMargin(estimated): ${initMargin && initMargin > 0 ? initMargin.toFixed(6) : (lev ? ( (notional/lev).toFixed(6) ) : '—')}\nnotional: ${Number(notional || 0).toFixed(6)}\nroiPct(mark): ${roiPct != null ? Number(roiPct).toFixed(6) : '—'}\nroiPct(index): ${roiIndexPct != null ? Number(roiIndexPct).toFixed(6) : '—'}`}
-                                </div>
-                              </div>
-                            ) : null}
-                            </>
                           )
                         })}
                       </div>
