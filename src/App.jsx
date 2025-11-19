@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react'
+
+import React, { useEffect, useRef, useState, Suspense, useMemo } from 'react';
 
 /*
   Redesigned front-end: Minimal, responsive dashboard shell.
@@ -34,105 +35,74 @@ function StatCard({ label, value, hint }) {
 }
 
 export default function App() {
-  const [connected, setConnected] = useState(false)
-  const [lastPrice, setLastPrice] = useState(null)
-  const [alerts, setAlerts] = useState([])
-  const [autoOrderEnabled, setAutoOrderEnabled] = useState(() => {
-    try { return localStorage.getItem('autoOrderEnabled') === 'true' } catch (e) { return false }
-  })
-  // Test order UI removed per request
+    // 추가: 누락된 상태 변수 및 함수 선언
+    const [activeTab, setActiveTab] = useState('alerts');
+    const [alerts, setAlerts] = useState(() => {
+      try { return JSON.parse(localStorage.getItem('alerts')) || [] } catch { return [] }
+    });
     const [orders, setOrders] = useState(() => {
-      try { const raw = localStorage.getItem('orders'); return raw ? JSON.parse(raw) : [] } catch (e) { return [] }
-    })
-    const [activeTab, setActiveTab] = useState('alerts') // kept for compatibility but unused
-  const [holdingsStr, setHoldingsStr] = useState(() => {
-    try { return localStorage.getItem('holdings') || '0' } catch (e) { return '0' }
-  })
-  const [futuresBalanceStr, setFuturesBalanceStr] = useState(() => {
-    try { return localStorage.getItem('futuresBalance') || '0' } catch (e) { return '0' }
-  })
-  const [account, setAccount] = useState(null)
-  const [wsStatus, setWsStatus] = useState('disconnected')
-  const [lastWsAt, setLastWsAt] = useState(null)
+      try { return JSON.parse(localStorage.getItem('orders')) || [] } catch { return [] }
+    });
+    const [autoOrderEnabled, setAutoOrderEnabled] = useState(() => {
+      try { return localStorage.getItem('autoOrderEnabled') === 'true' } catch { return false }
+    });
+    const [futuresBalanceStr, setFuturesBalanceStr] = useState(() => {
+      try { return localStorage.getItem('futuresBalance') || '' } catch { return '' }
+    });
+    const [holdingsStr, setHoldingsStr] = useState(() => {
+      try { return localStorage.getItem('holdings') || '' } catch { return '' }
+    });
+
+    // 심볼 표준화 함수 (Binance 심볼 대문자 변환)
+    function normalizeSym(sym) {
+      return String(sym || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    }
+  const [lastWsAt, setLastWsAt] = useState(null);
+  const [lastWsMsg, setLastWsMsg] = useState(null);
+  const [lastPrice, setLastPrice] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [positions, setPositions] = useState([]);
+  const [wsStatus, setWsStatus] = useState('disconnected');
   const [emaShortStr, setEmaShortStr] = useState(() => {
     try { return localStorage.getItem('emaShort') || '26' } catch (e) { return '26' }
-  })
+  });
   const [emaLongStr, setEmaLongStr] = useState(() => {
     try { return localStorage.getItem('emaLong') || '200' } catch (e) { return '200' }
-  })
+  });
   const [minutesStr, setMinutesStr] = useState(() => {
     try { return localStorage.getItem('minutes') || '1' } catch (e) { return '1' }
-  })
+  });
   const [symbolStr, setSymbolStr] = useState(() => {
     try { return localStorage.getItem('symbol') || 'BTCUSDT' } catch (e) { return 'BTCUSDT' }
-  })
-  const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26)
-  const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200)
-  const minutes = Math.max(1, parseInt(minutesStr, 10) || 1)
-  const symbol = (symbolStr && symbolStr.trim().toUpperCase()) || 'BTCUSDT'
+  });
+  const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26);
+  const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200);
+  const minutes = Math.max(1, parseInt(minutesStr, 10) || 1);
+  const symbol = (symbolStr && symbolStr.trim().toUpperCase()) || 'BTCUSDT';
   const formatPrice = (val) => {
-    if (val == null) return ''
-    const n = Number(val)
-    if (!isFinite(n)) return ''
-    const abs = Math.abs(n)
-    let maxDigits = 2
-    if (abs === 0) return '0'
-    // choose precision based on magnitude to avoid hiding small prices
-    if (abs < 0.0001) maxDigits = 8
-    else if (abs < 0.01) maxDigits = 8
-    else if (abs < 1) maxDigits = 6
-    else if (abs < 1000) maxDigits = 2
-    else maxDigits = 2
-    return n.toLocaleString(undefined, { maximumFractionDigits: maxDigits })
-  }
-  const normalizeSym = (s) => {
-    try { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '') } catch (e) { return String(s || '').toUpperCase() }
-  }
-  const price = formatPrice(lastPrice)
-  const holdings = Number(holdingsStr) || 0
-  const value = isFinite(Number(lastPrice)) ? holdings * Number(lastPrice) : null
-  const change = ''
-  const candles = 0
+    if (val == null) return '';
+    const n = Number(val);
+    if (!isFinite(n)) return '';
+    const abs = Math.abs(n);
+    let maxDigits = 2;
+    if (abs === 0) return '0';
+    if (abs < 0.0001) maxDigits = 8;
+    else if (abs < 0.01) maxDigits = 8;
+    else if (abs < 1) maxDigits = 6;
+    else if (abs < 1000) maxDigits = 2;
+    else maxDigits = 2;
+    return n.toLocaleString(undefined, { maximumFractionDigits: maxDigits });
+  };
+  const price = formatPrice(lastPrice);
+  const change = '';
 
-  // derive a quick client-side account snapshot using live price for snappy PNL updates
-  // Important: do NOT mutate server-provided totals (totalUnrealizedProfit / totalWalletBalance)
-  // to avoid diverging from Binance. Instead compute per-position display UPL when lastPrice is available.
+  // derivedAccount는 account와 positions을 합쳐서 만듭니다.
   const derivedAccount = useMemo(() => {
-    if (!account) return null
-    // shallow clone of account but keep authoritative totals intact
-    const acc = { ...account }
-    // compute displayUnrealizedProfit for all positions using latest markPrice or lastPrice
-    if (Array.isArray(account.positions)) {
-      acc.positions = account.positions.map(p => {
-        try {
-          if (!p || !p.symbol) return p
-          const amt = Number(p.positionAmt) || 0
-          const entry = Number(p.entryPrice) || 0
-          const mark = (typeof p.markPrice !== 'undefined' && p.markPrice !== null) ? Number(p.markPrice) : (isFinite(Number(lastPrice)) ? Number(lastPrice) : entry || 0)
-          const newUpl = (mark - entry) * amt
-          // prefer server unrealizedProfit when it's fresh, but keep a display-only fast value
-          const disp = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : newUpl
-          return { ...p, displayUnrealizedProfit: disp, _computedUpl: newUpl, _displayMark: mark }
-        } catch (e) { return { ...p, displayUnrealizedProfit: Number(p.unrealizedProfit) || 0 } }
-      })
-    } else {
-      acc.positions = []
-    }
-
-    // compute display totals from per-position displayUnrealizedProfit so price ticks update totals immediately
-    const displayTotalUnrealized = acc.positions.reduce((s, p) => s + (Number(p.displayUnrealizedProfit) || 0), 0)
-    const serverTotalUnrealized = Number(account.totalUnrealizedProfit) || 0
-    const serverWallet = Number(account.totalWalletBalance) || Number(futuresBalanceStr || 0)
-    // displayWalletBalance = serverWallet + (displayTotalUnrealized - serverTotalUnrealized)
-    const displayTotalWallet = serverWallet + (displayTotalUnrealized - serverTotalUnrealized)
-
-    // keep authoritative totals but expose display totals for UI rendering consistency
-    acc.totalUnrealizedProfit = serverTotalUnrealized
-    acc.totalWalletBalance = serverWallet
-    acc.displayTotalUnrealizedProfit = displayTotalUnrealized
-    acc.displayTotalWalletBalance = displayTotalWallet
-    return acc
-  }, [account, lastPrice, symbol])
+    if (!account) return null;
+    const acc = { ...account };
+    acc.positions = Array.isArray(positions) ? positions : [];
+    return acc;
+  }, [account, positions]);
 
   // Removed SSE and polling: rely on WebSocket `/ws/account` for all account snapshots and deltas
 
@@ -226,8 +196,33 @@ export default function App() {
   }
 
   const wsRef = useRef(null)
-  // connect immediately via websocket-only flow (no REST-first)
-  const [initialLoaded] = useState(true)
+  // attempt an initial REST load once, then open WS for realtime deltas
+  const [initialLoaded, setInitialLoaded] = useState(false)
+  // Cloudflare Worker에서 계정/포지션 정보 fetch (최초 1회 + 10초마다)
+  useEffect(() => {
+    let mounted = true;
+    const fetchAccountAndPositions = async () => {
+      try {
+        const accountRes = await fetch('/account');
+        if (accountRes.ok) {
+          const accountData = await accountRes.json();
+          if (mounted) setAccount(accountData);
+        }
+        const positionsRes = await fetch('/positions');
+        if (positionsRes.ok) {
+          const positionsData = await positionsRes.json();
+          if (mounted) setPositions(positionsData);
+        }
+        if (mounted) setInitialLoaded(true);
+      } catch (e) {
+        console.error('Cloudflare Worker fetch error:', e);
+        if (mounted) setInitialLoaded(true);
+      }
+    };
+    fetchAccountAndPositions();
+    const interval = setInterval(fetchAccountAndPositions, 10000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
@@ -237,6 +232,7 @@ export default function App() {
   // racing with the initial snapshot. This ensures UI shows initial data
   // then switches to socket for realtime deltas.
   useEffect(() => {
+    // if initial REST load not yet done, don't connect WS
     if (!initialLoaded) return
     let mounted = true
     let ws = null
@@ -275,6 +271,8 @@ export default function App() {
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data)
+          // expose last raw message for on-screen debugging
+          try { setLastWsMsg(msg) } catch (e) {}
           if (!mounted) return
           setLastWsAt(new Date().toISOString())
           // debug: log incoming message type and any symbol it carries
@@ -282,13 +280,13 @@ export default function App() {
           if (!msg) return
           // handle positional delta
           if (msg.type === 'pos_delta') {
-            const pos = msg.position || msg.pos || msg.data
+            const pos = msg.position || msg.pos || msg.data || msg
             if (!pos || !pos.symbol) return
-            // if the delta includes a markPrice, update live lastPrice for UI
+            // 항상 pos_delta의 markPrice를 lastPrice로 반영 (실시간 가격 동기화)
             if (typeof pos.markPrice !== 'undefined' && pos.markPrice !== null) {
-              try { setLastPrice(Number(pos.markPrice)) } catch (e) {}
+              setLastPrice(Number(pos.markPrice))
             } else if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null) {
-              try { setLastPrice(Number(msg.markPrice)) } catch (e) {}
+              setLastPrice(Number(msg.markPrice))
             }
             setAccount(prev => {
               const acc = prev ? { ...prev } : { positions: [] }
@@ -298,7 +296,6 @@ export default function App() {
               const amtNum = Number(pos.positionAmt) || 0
               if (idx >= 0) {
                 if (Math.abs(amtNum) === 0) {
-                  // position closed/flattened -> remove it immediately
                   acc.positions.splice(idx, 1)
                 } else {
                   acc.positions[idx] = { ...acc.positions[idx], ...pos }
@@ -308,7 +305,6 @@ export default function App() {
                   acc.positions.push({ ...pos })
                 }
               }
-              // if this is the currently selected symbol, persist holdings (store '0' when closed)
               if (sym === normalizeSym(symbol)) {
                 try { const amt = String(amtNum || 0); localStorage.setItem('holdings', amt); setHoldingsStr(amt) } catch (e) {}
               }
@@ -389,8 +385,27 @@ export default function App() {
   // snapshot is required, the server should emit a 'snapshot' message
   // over the existing WebSocket stream.
 
+  // 실시간 가격은 WebSocket으로 유지
+  useEffect(() => {
+    const ws = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
+    wsRef.current = ws;
+    ws.onopen = () => setWsStatus('connected');
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.p) setLastPrice(Number(message.p));
+    };
+    ws.onclose = () => setWsStatus('disconnected');
+    ws.onerror = () => setWsStatus('error');
+    return () => { if (wsRef.current) wsRef.current.close(); };
+  }, []);
+
   return (
     <div className="container body-root">
+      {/* Debug overlay: shows last WS message and connection status for troubleshooting */}
+      <div style={{position:'fixed',right:12,bottom:12,background:'rgba(0,0,0,0.7)',color:'#fff',padding:10,borderRadius:8,zIndex:9999,fontSize:12,maxWidth:420,whiteSpace:'pre-wrap'}}>
+        <div style={{fontWeight:700,marginBottom:6}}>WS: {wsStatus} {lastWsAt ? `@ ${new Date(lastWsAt).toLocaleTimeString()}` : ''}</div>
+        <div style={{maxHeight:180,overflow:'auto'}}>{lastWsMsg ? JSON.stringify(lastWsMsg,null,2) : '(no messages yet)'}</div>
+      </div>
       <Hero title="Binance Auto Trading System" statusNode={<SseIndicator />} />
 
       <main className="main-grid">
@@ -469,8 +484,9 @@ export default function App() {
                         {open.map(p => {
                           const amt = Number(p.positionAmt) || 0
                           const entry = Number(p.entryPrice) || 0
-                          // prefer server-provided markPrice, then lastPrice, then entry
-                          const mark = Number(p.markPrice) || Number(lastPrice) || entry || 0
+                          // prefer live `lastPrice` (from chart trades) first so UPL moves with price ticks,
+                          // then server-provided `markPrice`, then entry price
+                          const mark = (isFinite(Number(lastPrice)) ? Number(lastPrice) : (typeof p.markPrice !== 'undefined' && p.markPrice !== null ? Number(p.markPrice) : (entry || 0)))
 
                           // compute unrealized PnL using mark price (more consistent with Binance)
                           const computedUpl = (mark - entry) * amt

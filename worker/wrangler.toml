@@ -1,0 +1,10 @@
+name = "binance-auto-trade-worker"
+main = "index.js"
+compatibility_date = "2025-11-18"
+
+[vars]
+BINANCE_API_KEY = "<your-binance-api-key>"
+BINANCE_API_SECRET = "<your-binance-api-secret>"
+
+[build]
+command = ""
