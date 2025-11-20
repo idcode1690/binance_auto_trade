@@ -1,36 +1,63 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 function computeEMA(values, period) {
-  const k = 2 / (period + 1)
-  const out = []
-  let prev = null
+  const k = 2 / (period + 1);
+  const out = [];
+  let prev = null;
   for (let i = 0; i < values.length; i++) {
-    const v = values[i]
+    const v = values[i];
     if (v == null) {
-      out.push(null)
-      continue
+      out.push(null);
+      continue;
     }
     if (prev == null) {
-      prev = v
+      prev = v;
     } else {
-      prev = v * k + prev * (1 - k)
+      prev = v * k + prev * (1 - k);
     }
-    out.push(prev)
+    out.push(prev);
   }
-  return out
+  return out;
 }
 
 export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
-  const [klines, setKlines] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [emaShortArr, setEmaShortArr] = useState([])
-  const [emaLongArr, setEmaLongArr] = useState([])
-  const [wsStatus, setWsStatus] = useState('connecting')
-  const [wsError, setWsError] = useState(null)
-  const emaShortRef = useRef(null)
-  const emaLongRef = useRef(null)
+  const [klines, setKlines] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [emaShortArr, setEmaShortArr] = useState([]);
+  const [emaLongArr, setEmaLongArr] = useState([]);
+  const emaShortRef = useRef(null);
+  const emaLongRef = useRef(null);
+  const wsRef = useRef(null);
+  const tradeWsRef = useRef(null);
+  const initializedRef = useRef(false);
+  const gapResyncTimerRef = useRef(null);
+  const lastAutoResyncRef = useRef(0);
+  const wsQueueRef = useRef([]);
+  const isLoadingRef = useRef(true);
+  const chartDivRef = useRef(null);
+  const intervalToMs = (iv) => {
+    const map = {
+      '1m': 60000,
+      '3m': 180000,
+      '5m': 300000,
+      '15m': 900000,
+      '30m': 1800000,
+      '1h': 3600000,
+      '2h': 7200000,
+      '4h': 14400000,
+      '6h': 21600000,
+      '8h': 28800000,
+      '12h': 43200000,
+      '1d': 86400000,
+      '3d': 259200000,
+      '1w': 604800000,
+      '1M': 2592000000
+    };
+    return map[iv] || 60000;
+  };
+  const intervalMs = intervalToMs(interval);
 
-  // Binance parity: kline WS for all candle fields, trade WS for last close only
   useEffect(() => {
     let cancelled = false;
     let ws = null;
@@ -38,237 +65,163 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     let reconnectTimer = null;
     let tradeReconnectTimer = null;
 
-    // 1. REST로 초기 봉 받아오기 (Binance와 1:1 병합을 위해 마지막 봉 상태 체크)
     async function load() {
       setIsLoading(true);
+      isLoadingRef.current = true;
       try {
-        const cacheKey = `klines:${String(symbol).toUpperCase()}:${interval}:L${limit}`;
-        const TTL_MS = 1000 * 60 * 5;
-        try {
-          const raw = localStorage.getItem(cacheKey);
-          if (raw) {
-            const parsedCache = JSON.parse(raw);
-            if (parsedCache && Array.isArray(parsedCache.data) && parsedCache.ts && (Date.now() - parsedCache.ts) < TTL_MS) {
-              setKlines(parsedCache.data);
-              setIsLoading(false);
-              return;
-            }
-          }
-        } catch (e) {}
-
         const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`;
         const res = await fetch(url);
         const data = await res.json();
-        let parsed = data.map(r => ({
-          open: parseFloat(r[1]),
-          high: parseFloat(r[2]),
-          low: parseFloat(r[3]),
-          close: parseFloat(r[4]),
-          closed: !!r[6],
-          time: r[0]
-        }));
-        // 마지막 봉이 닫히지 않은 경우, 실시간 WS에서 동일 time 봉이 오면 덮어쓰기만 허용
-        if (parsed.length > 1 && !parsed[parsed.length - 1].closed) {
-          // 마지막 봉이 미완료 상태면, WS에서 같은 time 봉이 오면 덮어쓰기만 허용 (추가 X)
-        }
-        if (cancelled) return;
-        setKlines(parsed);
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: parsed }));
-        } catch (e) {}
+        let mappedRaw = Array.isArray(data) ? data : [];
+        let mapped = mappedRaw.map(r => {
+          const t = Number(r[0]);
+          const o = parseFloat(r[1]);
+          const h = parseFloat(r[2]);
+          const l = parseFloat(r[3]);
+          const c = parseFloat(r[4]);
+          const closeTime = Number(r[6]);
+          return {
+            time: t,
+            open: isFinite(o) ? o : null,
+            high: isFinite(h) ? h : null,
+            low: isFinite(l) ? l : null,
+            close: isFinite(c) ? c : null,
+            closed: isFinite(closeTime) ? (closeTime <= Date.now()) : true,
+            closeTime: isFinite(closeTime) ? closeTime : null
+          };
+        });
+        mapped.sort((a, b) => a.time - b.time);
+        setKlines(mapped);
         setIsLoading(false);
+        isLoadingRef.current = false;
       } catch (err) {
         setKlines([]);
         setIsLoading(false);
+        isLoadingRef.current = false;
       }
     }
 
-    // 2. kline WebSocket (실시간 봉 병합, Binance와 1:1)
     function handleKlineWS(candle) {
       setKlines(prev => {
-        if (!prev || prev.length === 0) return [candle];
-        let arr = prev.slice();
-        const last = arr[arr.length - 1];
-        // 마지막 봉이 닫히지 않은 상태에서만 덮어쓰기 허용
-        if (candle.time === last.time) {
-          arr[arr.length - 1] = candle;
-        } else if (candle.time > last.time) {
-          // 마지막 봉이 닫힌 경우에만 추가
-          if (last.closed) {
+        let arr = prev && prev.length ? prev.slice() : [];
+        if (!prev || prev.length === 0) arr = [candle];
+        else {
+          const last = arr[arr.length - 1];
+          if (candle.time === last.time) {
+            arr[arr.length - 1] = candle;
+          } else if (candle.time > last.time) {
             arr.push(candle);
             if (arr.length > limit) arr = arr.slice(arr.length - limit);
+          } else {
+            const idx = arr.findIndex(x => x.time === candle.time);
+            if (idx >= 0) {
+              arr[idx] = candle;
+            }
           }
         }
-        // 과거 봉은 무시
         return arr;
       });
     }
 
-    try {
-      setWsStatus('connecting');
-      setWsError(null);
-      const symLower = String(symbol || 'BTCUSDT').toLowerCase();
-      const klineUrl = `wss://stream.binance.com:9443/ws/${symLower}@kline_${interval}`;
-      ws = new WebSocket(klineUrl);
-      ws.onopen = () => setWsStatus('connected');
-      ws.onclose = () => {
-        setWsStatus('disconnected');
-        if (!cancelled) reconnectTimer = setTimeout(() => load(), 3000);
-      };
-      ws.onerror = (e) => { setWsStatus('error'); setWsError('Kline WS error'); };
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          const k = msg.k;
-          if (k) {
-            const candle = {
-              open: parseFloat(k.o),
-              high: parseFloat(k.h),
-              low: parseFloat(k.l),
-              close: parseFloat(k.c),
-              time: k.t,
-              closed: !!k.x
-            };
-            handleKlineWS(candle);
-          }
-        } catch (e) {}
-      };
-    } catch (e) {
-      setWsStatus('error');
-      setWsError('Kline WS open failed');
+    function initSockets() {
+      if (initializedRef.current) return;
+      initializedRef.current = true;
+      try {
+        const symLower = String(symbol || 'BTCUSDT').toLowerCase();
+        const klineUrl = `wss://stream.binance.com:9443/ws/${symLower}@kline_${interval}`;
+        ws = new WebSocket(klineUrl);
+        wsRef.current = ws;
+        ws.onopen = () => {};
+        ws.onclose = () => { if (!cancelled) reconnectTimer = setTimeout(() => initSockets(), 3000); };
+        ws.onerror = () => {};
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            const k = msg.k;
+            if (k) {
+              const candle = {
+                open: parseFloat(k.o),
+                high: parseFloat(k.h),
+                low: parseFloat(k.l),
+                close: parseFloat(k.c),
+                time: k.t,
+                closed: !!k.x
+              };
+              if (isLoadingRef.current) {
+                wsQueueRef.current = wsQueueRef.current || [];
+                wsQueueRef.current.push(candle);
+                return;
+              }
+              handleKlineWS(candle);
+            }
+          } catch (e) {}
+        };
+      } catch (e) {}
     }
 
-    // 3. trade WebSocket (마지막 봉 close만 실시간 반영)
-    try {
-      const symLower = String(symbol || 'BTCUSDT').toLowerCase();
-      const tradeUrl = `wss://stream.binance.com:9443/ws/${symLower}@trade`;
-      tradeWs = new WebSocket(tradeUrl);
-      tradeWs.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.e === 'trade' && msg.p) {
-            const price = parseFloat(msg.p);
-            setKlines(prev => {
-              if (!prev || prev.length === 0) return prev;
-              const last = prev[prev.length - 1];
-              if (last.closed) return prev;
-              if (!isFinite(price)) return prev;
-              const updated = { ...last, close: price };
-              const copy = prev.slice(0, prev.length - 1);
-              copy.push(updated);
-              return copy;
-            });
-          }
-        } catch (e) {}
-      };
-      tradeWs.onerror = (e) => {};
-      tradeWs.onclose = () => { if (!cancelled) tradeReconnectTimer = setTimeout(() => load(), 3000); };
-    } catch (e) {}
+    load().then(() => {
+      initSockets();
+    });
 
-    load();
     return () => {
       cancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (tradeReconnectTimer) clearTimeout(tradeReconnectTimer);
-      try { if (ws) ws.close(); } catch {}
-      try { if (tradeWs) tradeWs.close(); } catch {}
+      try { if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) wsRef.current.close(); } catch {}
+      initializedRef.current = false;
     };
   }, [interval, limit, symbol]);
 
   useEffect(() => {
-    if (!klines || klines.length === 0) return
-    const closes = klines.map(p => p.close)
-    const fullShort = computeEMA(closes, emaShort)
-    const fullLong = computeEMA(closes, emaLong)
-    setEmaShortArr(fullShort)
-    setEmaLongArr(fullLong)
-    emaShortRef.current = fullShort.length ? fullShort[fullShort.length - 1] : null
-    emaLongRef.current = fullLong.length ? fullLong[fullLong.length - 1] : null
-  }, [klines, emaShort, emaLong])
+    if (!klines || klines.length === 0) return;
+    const closes = klines.map(p => p.close);
+    const fullShort = computeEMA(closes, emaShort);
+    const fullLong = computeEMA(closes, emaLong);
+    setEmaShortArr(fullShort);
+    setEmaLongArr(fullLong);
+    emaShortRef.current = fullShort.length ? fullShort[fullShort.length - 1] : null;
+    emaLongRef.current = fullLong.length ? fullLong[fullLong.length - 1] : null;
+  }, [klines, emaShort, emaLong]);
 
-  // livePrice prop 및 관련 useEffect 완전 제거 (서버/클라 혼재 방지)
-  const width = 600
-  // default height reduced by ~30% to address user's request
-  // start expanded so the initial chart loads in a zoomed-in state
-  const [expanded, setExpanded] = useState(true)
-  // original values were 380 / 220; reduce both by ~30%
-  const height = expanded ? 266 : 154
-  const padding = 2
-  const points = klines.length
-  // viewCount: number of candles visible (user-controlled via mouse wheel)
-  // default fewer visible candles to present a more-zoomed initial view
-  const [viewCount, setViewCount] = useState(80)
-  const minView = 10
-  const maxView = Math.max(minView, limit)
+  const width = 600;
+  const [expanded, setExpanded] = useState(true);
+  const height = expanded ? 266 : 154;
+  const padding = 2;
+  const points = klines.length;
+  const [viewCount, setViewCount] = useState(80);
+  const minView = 10;
+  const maxView = Math.max(minView, limit);
 
-  const viewN = Math.min(points, viewCount)
-  const slice = klines.slice(-viewN)
-  const eShorts = emaShortArr.slice(-viewN)
-  const eLongs = emaLongArr.slice(-viewN)
-  // Wheel handler: zoom in/out by changing visible candle count.
+  const viewN = Math.min(points, viewCount);
+  const slice = klines.slice(-viewN);
+  const eShorts = emaShortArr.slice(-viewN);
+  const eLongs = emaLongArr.slice(-viewN);
   const handleWheel = useCallback((e) => {
-    try { e.preventDefault() } catch (er) {}
-    const delta = e.deltaY
-    const step = Math.max(1, Math.round(viewCount * 0.12))
-    let next = viewCount
+    try { e.preventDefault(); } catch (er) {}
+    const delta = e.deltaY;
+    const step = Math.max(1, Math.round(viewCount * 0.12));
+    let next = viewCount;
     if (delta < 0) {
-      next = Math.max(minView, viewCount - step)
+      next = Math.max(minView, viewCount - step);
     } else if (delta > 0) {
-      const upper = Math.min(Math.max(minView, points || 0), maxView)
-      next = Math.min(upper, viewCount + step)
+      const upper = Math.min(Math.max(minView, points || 0), maxView);
+      next = Math.min(upper, viewCount + step);
     }
-    if (next !== viewCount) setViewCount(next)
-  }, [viewCount, minView, maxView, points])
+    if (next !== viewCount) setViewCount(next);
+  }, [viewCount, minView, maxView, points]);
 
-  const canZoomIn = viewN > minView
-  const canZoomOut = viewN < Math.min(points, maxView)
+  const canZoomIn = viewN > minView;
+  const canZoomOut = viewN < Math.min(points, maxView);
 
-  // adjust viewCount when expanded toggles to provide a zoomed-in view
   useEffect(() => {
-    if (!points) return
+    if (!points) return;
     if (expanded) {
-      // reduce visible candles to give zoomed feel
-      setViewCount(vc => Math.max(minView, Math.round(vc * 0.6)))
+      setViewCount(vc => Math.max(minView, Math.round(vc * 0.6)));
     } else {
-      // expand visible candles back
-      setViewCount(vc => Math.min(Math.max(minView, points || 0, maxView), Math.round(vc / 0.6)))
+      setViewCount(vc => Math.min(Math.max(minView, points || 0, maxView), Math.round(vc / 0.6)));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded])
-
-  // notifiedRef + onCross effect must be declared before any early returns
-  const notifiedRef = useRef(new Set())
-  useEffect(() => {
-    if (!onCross) return
-    if (!emaShortArr || !emaLongArr) return
-    // only detect crosses when the latest candle is closed
-    const lastK = klines && klines.length > 0 ? klines[klines.length - 1] : null
-    if (!lastK || !lastK.closed) return
-    const n = Math.min(emaShortArr.length, emaLongArr.length)
-    if (n < 2) return
-    const i = n - 1
-    const aPrev = emaShortArr[i - 1]
-    const bPrev = emaLongArr[i - 1]
-    const a = emaShortArr[i]
-    const b = emaLongArr[i]
-    if (a == null || b == null || aPrev == null || bPrev == null) return
-    const prevDiff = aPrev - bPrev
-    const currDiff = a - b
-    let type = null
-    if (prevDiff <= 0 && currDiff > 0) type = 'bull'
-    else if (prevDiff >= 0 && currDiff < 0) type = 'bear'
-    if (type) {
-      const time = klines && klines.length > 0 ? klines[klines.length - 1].time : Date.now()
-      const key = `${time}:${type}`
-      if (!notifiedRef.current.has(key)) {
-        notifiedRef.current.add(key)
-        try { onCross({ type, time, price: klines[klines.length - 1].close }) } catch (e) {}
-      }
-    }
-  }, [emaShortArr, emaLongArr, onCross, klines])
+  }, [expanded]);
 
   // wheel 이벤트를 passive: false로 등록하여 preventDefault 에러 방지
-  const chartDivRef = useRef(null);
   useEffect(() => {
     const el = chartDivRef.current;
     if (!el) return;
@@ -276,45 +229,54 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     return () => { el.removeEventListener('wheel', handleWheel, { passive: false }); };
   }, [handleWheel]);
 
-  // ensure numeric highs/lows exist, prevent 0/NaN
-  const highs = slice.map(s => Number(s.high)).filter(v => isFinite(v) && v !== 0);
-  const lows = slice.map(s => Number(s.low)).filter(v => isFinite(v) && v !== 0);
-  if (highs.length === 0 || lows.length === 0) {
+  const highVals = slice.map(s => {
+    const cand = [s.high, s.open, s.close, s.low].map(x => Number(x)).filter(v => isFinite(v));
+    return cand.length ? Math.max(...cand) : null;
+  }).filter(v => v != null);
+  const lowVals = slice.map(s => {
+    const cand = [s.low, s.open, s.close, s.high].map(x => Number(x)).filter(v => isFinite(v));
+    return cand.length ? Math.min(...cand) : null;
+  }).filter(v => v != null);
+  if (highVals.length === 0 || lowVals.length === 0) {
     if (isLoading) return <div className="meta">Loading chart...</div>;
-    return <div className="meta">No data for {String(symbol)}</div>;
+    return (
+      <div className="meta">
+        <div>No data for {String(symbol)}</div>
+        <details style={{maxHeight: 200, overflow: 'auto'}}>
+          <summary>Raw slice (first 20)</summary>
+          <pre style={{whiteSpace: 'pre-wrap', fontSize: 12}}>{JSON.stringify(slice.slice(-20), null, 2)}</pre>
+        </details>
+      </div>
+    );
   }
-  const max = Math.max(...highs);
-  const min = Math.min(...lows);
-  // compute xStep and bar width, then ensure there is extra right padding
-  // so the rightmost candle body isn't clipped by the SVG edge.
-  let xStep = (width - padding * 2) / (viewN - 1 || 1)
-  let barW = Math.max(1, xStep * 0.6)
-  const padLeft = padding
-  const padRight = Math.max(padding, Math.ceil(barW / 2) + 1)
-  xStep = (width - padLeft - padRight) / (viewN - 1 || 1)
-  barW = Math.max(1, xStep * 0.6)
+  const max = Math.max(...highVals);
+  const min = Math.min(...lowVals);
+  let xStep = (width - padding * 2) / (viewN - 1 || 1);
+  let barW = Math.max(1, xStep * 0.6);
+  const padLeft = padding;
+  const padRight = Math.max(padding, Math.ceil(barW / 2) + 1);
+  xStep = (width - padLeft - padRight) / (viewN - 1 || 1);
+  barW = Math.max(1, xStep * 0.6);
 
-  const yFor = v => padding + (1 - (v - min) / (max - min || 1)) * (height - padding * 2)
+  const yFor = v => padding + (1 - (v - min) / (max - min || 1)) * (height - padding * 2);
 
   const makePath = arr => {
-    let d = ''
+    let d = '';
     for (let i = 0; i < arr.length; i++) {
-      const v = arr[i]
-      if (v == null) continue
-      const x = padding + i * xStep
-      const y = yFor(v)
-      d += (d === '' ? `M ${x} ${y}` : ` L ${x} ${y}`)
+      const v = arr[i];
+      if (v == null) continue;
+      const x = padding + i * xStep;
+      const y = yFor(v);
+      d += (d === '' ? `M ${x} ${y}` : ` L ${x} ${y}`);
     }
-    return d
-  }
+    return d;
+  };
 
-  const pathShort = makePath(eShorts)
-  const pathLong = makePath(eLongs)
+  const pathShort = makePath(eShorts);
+  const pathLong = makePath(eLongs);
 
-  // EMA cross 마커는 닫힌 봉에만 표시
   const crosses = [];
   for (let i = 1; i < viewN; i++) {
-    // 마지막 봉이 닫히지 않은 경우, 그 전까지만 마커 표시
     if (i === viewN - 1 && slice.length && !slice[slice.length - 1].closed) break;
     const aPrev = eShorts[i - 1];
     const bPrev = eLongs[i - 1];
@@ -334,29 +296,28 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     }
   }
 
-  if (points === 0) return <div className="meta">Loading chart...</div>
+  if (points === 0) return <div className="meta">Loading chart...</div>;
 
   return (
     <div ref={chartDivRef} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{width: '100%', height: 'auto', display: 'block'}}>
           {slice.map((c, i) => {
-          // skip invalid candle data
-          if (![c.open, c.high, c.low, c.close].every(x => isFinite(Number(x)))) return null
-            const x = padLeft + i * xStep
-          const highY = yFor(c.high)
-          const lowY = yFor(c.low)
-          const openY = yFor(c.open)
-          const closeY = yFor(c.close)
-          const isUp = c.close >= c.open
-          const color = isUp ? '#0f9d58' : '#d93025'
-          const bodyY = Math.min(openY, closeY)
-          const bodyH = Math.max(1, Math.abs(closeY - openY))
+          if (![c.open, c.high, c.low, c.close].every(x => isFinite(Number(x)))) return null;
+            const x = padLeft + i * xStep;
+          const highY = yFor(c.high);
+          const lowY = yFor(c.low);
+          const openY = yFor(c.open);
+          const closeY = yFor(c.close);
+          const isUp = c.close >= c.open;
+          const color = isUp ? '#0f9d58' : '#d93025';
+          const bodyY = Math.min(openY, closeY);
+          const bodyH = Math.max(1, Math.abs(closeY - openY));
           return (
             <g key={c.time}>
               <line x1={x} x2={x} y1={highY} y2={lowY} stroke={color} strokeWidth={1} />
               <rect x={x - barW / 2} y={bodyY} width={barW} height={bodyH} fill={color} />
             </g>
-          )
+          );
         })}
 
         {pathLong && <path className="ema200" d={pathLong} fill="none" stroke="#888" strokeWidth={1.2} />}
@@ -373,5 +334,5 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
         <span className="legend-item"><span className="swatch bear"/>Bear Cross</span>
       </div>
     </div>
-  )
+  );
 }

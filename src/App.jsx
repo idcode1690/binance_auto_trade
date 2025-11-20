@@ -385,19 +385,7 @@ export default function App() {
   // snapshot is required, the server should emit a 'snapshot' message
   // over the existing WebSocket stream.
 
-  // 실시간 가격은 WebSocket으로 유지
-  useEffect(() => {
-    const ws = new WebSocket('wss://fstream.binance.com/ws/btcusdt@trade');
-    wsRef.current = ws;
-    ws.onopen = () => setWsStatus('connected');
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.p) setLastPrice(Number(message.p));
-    };
-    ws.onclose = () => setWsStatus('disconnected');
-    ws.onerror = () => setWsStatus('error');
-    return () => { if (wsRef.current) wsRef.current.close(); };
-  }, []);
+  // 실시간 가격 WebSocket(useEffect) 제거됨. SmallEMAChart에서만 관리.
 
   return (
     <div className="container body-root">
