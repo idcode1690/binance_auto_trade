@@ -440,6 +440,7 @@ export default function App() {
                     setOrders(prev => { const next = [orderEntry, ...prev].slice(0, 200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
                   } catch (e) {}
                 }}
+                onPrice={setLastPrice}
                 emaShort={emaShort}
                 emaLong={emaLong}
                 minutes={minutes}
@@ -622,7 +623,7 @@ export default function App() {
   )
 }
 
-function ChartToggle({ onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
+function ChartToggle({ onCross, onPrice, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
   const toBinanceInterval = (m) => {
     const n = Math.max(1, Number(m || 1))
     const map = {
@@ -646,6 +647,7 @@ function ChartToggle({ onCross, emaShort = 26, emaLong = 200, minutes = 1, symbo
         interval={interval}
         limit={300}
         onCross={onCross}
+        onPrice={onPrice}
         emaShort={Number(emaShort)||26}
         emaLong={Number(emaLong)||200}
         symbol={String(symbol || 'BTCUSDT')}

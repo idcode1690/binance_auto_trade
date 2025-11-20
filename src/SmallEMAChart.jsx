@@ -21,7 +21,7 @@ function computeEMA(values, period) {
   return out;
 }
 
-export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
+export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = null, onPrice = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
   const [klines, setKlines] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [emaShortArr, setEmaShortArr] = useState([]);
@@ -64,6 +64,39 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     let tradeWs = null;
     let reconnectTimer = null;
     let tradeReconnectTimer = null;
+
+    // 실시간 trade 가격을 마지막 봉 close에 반영
+    function startTradeWS() {
+      try {
+        const symLower = String(symbol || 'BTCUSDT').toLowerCase();
+        const tradeUrl = `wss://stream.binance.com:9443/ws/${symLower}@trade`;
+        tradeWs = new WebSocket(tradeUrl);
+        tradeWsRef.current = tradeWs;
+        tradeWs.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            const price = parseFloat(msg.p);
+            if (!isFinite(price)) return;
+            setKlines(prev => {
+              if (!prev || prev.length === 0) return prev;
+              const arr = prev.slice();
+              const last = arr[arr.length - 1];
+              // 마지막 봉이 닫히지 않은 경우에만 실시간 가격 반영
+              if (last && last.closed === false) {
+                arr[arr.length - 1] = { ...last, close: price };
+                return arr;
+              }
+              return prev;
+            });
+            if (onPrice) {
+              try { onPrice(price); } catch (e) {}
+            }
+          } catch (e) {}
+        };
+        tradeWs.onclose = () => { if (!cancelled) tradeReconnectTimer = setTimeout(() => startTradeWS(), 3000); };
+        tradeWs.onerror = () => {};
+      } catch (e) {}
+    }
 
     async function load() {
       setIsLoading(true);
@@ -161,12 +194,15 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
 
     load().then(() => {
       initSockets();
+      startTradeWS();
     });
 
     return () => {
       cancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (tradeReconnectTimer) clearTimeout(tradeReconnectTimer);
       try { if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) wsRef.current.close(); } catch {}
+      try { if (tradeWsRef.current && tradeWsRef.current.readyState !== WebSocket.CLOSED) tradeWsRef.current.close(); } catch {}
       initializedRef.current = false;
     };
   }, [interval, limit, symbol]);
@@ -180,7 +216,14 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     setEmaLongArr(fullLong);
     emaShortRef.current = fullShort.length ? fullShort[fullShort.length - 1] : null;
     emaLongRef.current = fullLong.length ? fullLong[fullLong.length - 1] : null;
-  }, [klines, emaShort, emaLong]);
+    // 실시간 가격 콜백 (마지막 봉의 close)
+    if (onPrice && klines.length > 0) {
+      const last = klines[klines.length - 1];
+      if (last && typeof last.close === 'number' && isFinite(last.close)) {
+        try { onPrice(last.close); } catch (e) {}
+      }
+    }
+  }, [klines, emaShort, emaLong, onPrice]);
 
   const width = 600;
   const [expanded, setExpanded] = useState(true);
