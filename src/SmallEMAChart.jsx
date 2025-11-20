@@ -65,7 +65,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     let reconnectTimer = null;
     let tradeReconnectTimer = null;
 
-    // 실시간 trade 가격을 마지막 봉 close에 반영
+    // 실시간 trade 가격을 마지막 봉 close에 반영 (단, 마지막 봉이 닫히지 않은 경우에만)
     function startTradeWS() {
       try {
         const symLower = String(symbol || 'BTCUSDT').toLowerCase();
@@ -98,6 +98,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
       } catch (e) {}
     }
 
+    // REST + gap 보정 + 병합
     async function load() {
       setIsLoading(true);
       isLoadingRef.current = true;
@@ -124,7 +125,45 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
           };
         });
         mapped.sort((a, b) => a.time - b.time);
-        setKlines(mapped);
+        // gap 보정: 연속되지 않은 봉이 있으면 REST로 추가 fetch
+        const gaps = [];
+        for (let i = 1; i < mapped.length; i++) {
+          const prev = mapped[i - 1];
+          const cur = mapped[i];
+          if (!isFinite(prev.time) || !isFinite(cur.time)) continue;
+          const diff = cur.time - prev.time;
+          if (diff > intervalToMs(interval) + 1000) {
+            const missingCount = Math.max(1, Math.round(diff / intervalToMs(interval)) - 1);
+            gaps.push({ start: prev.time + intervalToMs(interval), end: cur.time - intervalToMs(interval), missingCount });
+          }
+        }
+        if (gaps.length > 0) {
+          for (const g of gaps) {
+            try {
+              const url2 = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&startTime=${g.start}&endTime=${g.end}&limit=${g.missingCount}`;
+              const res2 = await fetch(url2);
+              const data2 = await res2.json();
+              if (Array.isArray(data2) && data2.length) {
+                for (const r of data2) {
+                  const t = Number(r[0]);
+                  const o = parseFloat(r[1]);
+                  const h = parseFloat(r[2]);
+                  const l = parseFloat(r[3]);
+                  const c = parseFloat(r[4]);
+                  const closeTime = Number(r[6]);
+                  mapped.push({ time: t, open: isFinite(o) ? o : null, high: isFinite(h) ? h : null, low: isFinite(l) ? l : null, close: isFinite(c) ? c : null, closed: isFinite(closeTime) ? (closeTime <= Date.now()) : true, closeTime: isFinite(closeTime) ? closeTime : null });
+                }
+              }
+            } catch (e) {}
+          }
+          mapped.sort((a, b) => a.time - b.time);
+        }
+        // dedupe by time
+        const byTime = new Map();
+        for (const it of mapped) byTime.set(it.time, it);
+        let parsed = Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+        if (parsed.length > limit) parsed = parsed.slice(parsed.length - limit);
+        setKlines(parsed);
         setIsLoading(false);
         isLoadingRef.current = false;
       } catch (err) {
@@ -134,6 +173,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
       }
     }
 
+    // WebSocket 봉 병합: 봉 닫힘 신호 처리, 중복/누락 보정
     function handleKlineWS(candle) {
       setKlines(prev => {
         let arr = prev && prev.length ? prev.slice() : [];
@@ -141,6 +181,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
         else {
           const last = arr[arr.length - 1];
           if (candle.time === last.time) {
+            // 봉 닫힘 신호가 오면 해당 봉을 고정
             arr[arr.length - 1] = candle;
           } else if (candle.time > last.time) {
             arr.push(candle);
@@ -233,6 +274,24 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
   const [viewCount, setViewCount] = useState(80);
   const minView = 10;
   const maxView = Math.max(minView, limit);
+
+  // 봉완성 카운트다운 (더 부드럽게, 0.3초 단위)
+  const [countdown, setCountdown] = useState(null);
+  useEffect(() => {
+    if (!klines || klines.length === 0) return setCountdown(null);
+    const last = klines[klines.length - 1];
+    if (!last || !last.time) return setCountdown(null);
+    const intervalMs = intervalToMs(interval);
+    let nextCandleTime = last.time + intervalMs;
+    if (last.closed) nextCandleTime = Date.now() + intervalMs; // 이미 닫힌 경우(새 봉 시작 직후)
+    function update() {
+      const remainMs = nextCandleTime - Date.now();
+      setCountdown(remainMs > 0 ? (remainMs / 1000) : 0);
+    }
+    update();
+    const timer = setInterval(update, 300);
+    return () => clearInterval(timer);
+  }, [klines, interval]);
 
   const viewN = Math.min(points, viewCount);
   const slice = klines.slice(-viewN);
@@ -343,6 +402,10 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
 
   return (
     <div ref={chartDivRef} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
+      {/* 봉완성 카운트다운 표시 */}
+      <div style={{fontSize:14, fontWeight:600, color:'#888', marginBottom:4, textAlign:'right'}}>
+        {countdown !== null && <span>봉완성까지 {countdown.toFixed(1)}s</span>}
+      </div>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{width: '100%', height: 'auto', display: 'block'}}>
           {slice.map((c, i) => {
           if (![c.open, c.high, c.low, c.close].every(x => isFinite(Number(x)))) return null;
