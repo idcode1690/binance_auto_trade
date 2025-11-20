@@ -404,7 +404,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = 
     <div ref={chartDivRef} style={{width: '100%', overflow: 'hidden', cursor: canZoomIn ? 'zoom-in' : (canZoomOut ? 'zoom-out' : 'default')}}>
       {/* 봉완성 카운트다운 표시 */}
       <div style={{fontSize:14, fontWeight:600, color:'#888', marginBottom:4, textAlign:'right'}}>
-        {countdown !== null && <span>봉완성까지 {countdown.toFixed(1)}s</span>}
+        {countdown !== null && <span>Until candle close {countdown.toFixed(1)}s</span>}
       </div>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{width: '100%', height: 'auto', display: 'block'}}>
           {slice.map((c, i) => {
