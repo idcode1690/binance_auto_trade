@@ -20,7 +20,7 @@ function computeEMA(values, period) {
   return out
 }
 
-export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice = null, onTrade = null, onCross = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
+export default function SmallEMAChart({ interval = '1m', limit = 200, onCross = null, emaShort = 26, emaLong = 200, symbol = 'BTCUSDT' }) {
   const [klines, setKlines] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [emaShortArr, setEmaShortArr] = useState([])
@@ -112,12 +112,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
             })
             return
           }
-          if (data && (data.p || data.price)) {
-            const price = parseFloat(data.p || data.price || data.P)
-            if (onTrade && isFinite(price)) {
-              try { onTrade(price) } catch (e) { /* ignore */ }
-            }
-          }
+          // 실시간 가격은 오직 바이낸스 WebSocket에서만 반영 (서버/클라 혼재 방지)
         } catch (e) {}
       }
       ws.onerror = (e) => console.warn('combined ws error', e)
@@ -127,7 +122,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
 
     load()
     return () => { cancelled = true; try { if (ws) ws.close() } catch {} }
-  }, [interval, limit, symbol, onTrade])
+  }, [interval, limit, symbol])
 
   useEffect(() => {
     if (!klines || klines.length === 0) return
@@ -140,66 +135,7 @@ export default function SmallEMAChart({ interval = '1m', limit = 200, livePrice 
     emaLongRef.current = fullLong.length ? fullLong[fullLong.length - 1] : null
   }, [klines, emaShort, emaLong])
 
-  const pendingPriceRef = useRef(null)
-  const rafRef = useRef(null)
-
-  useEffect(() => {
-    if (livePrice == null) return
-    const p = Number(livePrice)
-    if (!isFinite(p)) return
-    pendingPriceRef.current = p
-    if (rafRef.current == null) {
-      rafRef.current = requestAnimationFrame(() => {
-        const priceToApply = pendingPriceRef.current
-        pendingPriceRef.current = null
-        rafRef.current = null
-
-        setKlines(prev => {
-          if (!prev || prev.length === 0) return prev
-          const copy = prev.slice()
-          const last = copy[copy.length - 1]
-          if (!last) return prev
-          const updated = {
-            ...last,
-            close: priceToApply,
-            high: Math.max(last.high, priceToApply),
-            low: Math.min(last.low, priceToApply)
-          }
-          copy[copy.length - 1] = updated
-          return copy
-        })
-
-        try {
-          if (emaShortRef.current != null && emaLongRef.current != null) {
-            const kShort = 2 / (emaShort + 1)
-            const kLong = 2 / (emaLong + 1)
-            const newShort = priceToApply * kShort + emaShortRef.current * (1 - kShort)
-            const newLong = priceToApply * kLong + emaLongRef.current * (1 - kLong)
-            emaShortRef.current = newShort
-            emaLongRef.current = newLong
-            setEmaShortArr(prev => {
-              if (!prev || prev.length === 0) return prev
-              const copy = prev.slice()
-              copy[copy.length - 1] = newShort
-              return copy
-            })
-            setEmaLongArr(prev => {
-              if (!prev || prev.length === 0) return prev
-              const copy = prev.slice()
-              copy[copy.length - 1] = newLong
-              return copy
-            })
-          }
-        } catch (e) {}
-      })
-    }
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current)
-        rafRef.current = null
-      }
-    }
-  }, [livePrice])
+  // livePrice prop 및 관련 useEffect 완전 제거 (서버/클라 혼재 방지)
   const width = 600
   // default height reduced by ~30% to address user's request
   // start expanded so the initial chart loads in a zoomed-in state

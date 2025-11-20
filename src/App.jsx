@@ -401,11 +401,7 @@ export default function App() {
 
   return (
     <div className="container body-root">
-      {/* Debug overlay: shows last WS message and connection status for troubleshooting */}
-      <div style={{position:'fixed',right:12,bottom:12,background:'rgba(0,0,0,0.7)',color:'#fff',padding:10,borderRadius:8,zIndex:9999,fontSize:12,maxWidth:420,whiteSpace:'pre-wrap'}}>
-        <div style={{fontWeight:700,marginBottom:6}}>WS: {wsStatus} {lastWsAt ? `@ ${new Date(lastWsAt).toLocaleTimeString()}` : ''}</div>
-        <div style={{maxHeight:180,overflow:'auto'}}>{lastWsMsg ? JSON.stringify(lastWsMsg,null,2) : '(no messages yet)'}</div>
-      </div>
+      {/* Debug overlay(WS 상태 토스트) 제거됨 */}
       <Hero title="Binance Auto Trading System" statusNode={<SseIndicator />} />
 
       <main className="main-grid">
@@ -433,8 +429,6 @@ export default function App() {
                 <input className="theme-input" type="number" min={1} value={minutesStr} onChange={e=>setMinutesStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(minutesStr,10) || 1)); setMinutesStr(v); try{ localStorage.setItem('minutes', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
               </div>
               <ChartToggle
-                livePrice={lastPrice}
-                onTrade={setLastPrice}
                 onCross={(c) => {
                   // add cross alert
                   setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 200))
@@ -640,7 +634,7 @@ export default function App() {
   )
 }
 
-function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
+function ChartToggle({ onCross, emaShort = 26, emaLong = 200, minutes = 1, symbol = 'BTCUSDT' }) {
   const toBinanceInterval = (m) => {
     const n = Math.max(1, Number(m || 1))
     const map = {
@@ -656,13 +650,13 @@ function ChartToggle({ livePrice, onTrade, onCross, emaShort = 26, emaLong = 200
     return `${n}m`
   }
   const interval = toBinanceInterval(minutes)
+  // key를 부여하여 주요 파라미터 변경 시에만 마운트/언마운트
   return (
     <Suspense fallback={<div className="meta">Loading chart...</div>}>
       <SmallEMAChart
+        key={`${symbol}-${interval}-${emaShort}-${emaLong}-${minutes}`}
         interval={interval}
         limit={300}
-        livePrice={livePrice}
-        onTrade={onTrade}
         onCross={onCross}
         emaShort={Number(emaShort)||26}
         emaLong={Number(emaLong)||200}
