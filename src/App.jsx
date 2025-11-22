@@ -233,6 +233,18 @@ export default function App() {
     return () => { mounted = false };
   }, [showSymbolList]);
 
+  // allow closing the symbol picker with the Escape key when it's open
+  useEffect(() => {
+    if (!showSymbolList) return;
+    const onKey = (e) => {
+      if (e && (e.key === 'Escape' || e.key === 'Esc')) {
+        setShowSymbolList(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSymbolList]);
+
   // loadSymbols: reusable fetch function to populate symbolsList
   async function loadSymbols() {
     try {
@@ -469,8 +481,9 @@ export default function App() {
                   </div>
                   {showSymbolList && (
                     <div className="symbol-picker" style={{position:'absolute',right:0,top:'42px',zIndex:60}}>
-                      <div style={{padding:8,display:'flex',gap:8}}>
+                      <div style={{padding:8,display:'flex',gap:8,alignItems:'center'}}>
                         <input className="theme-input" placeholder="Filter" value={symbolFilter} onChange={e=>setSymbolFilter(e.target.value.toUpperCase())} style={{width:180}} />
+                        <button className="picker-close" aria-label="Close symbol list" onClick={() => setShowSymbolList(false)} style={{marginLeft:6}}>&times;</button>
                       </div>
                       <div style={{maxHeight:'72vh',overflow:'auto'}}>
                           {(() => {
@@ -480,7 +493,7 @@ export default function App() {
                             if (symbolsLoading) return (<div style={{padding:10,color:'var(--muted)'}}>Loading symbols…</div>)
                             if (!filtered.length) return (<div style={{padding:10,color:'var(--muted)'}}>No symbols</div>)
                             return filtered.map(s => (
-                              <div key={s} onClick={() => { const val = String(s||'BTCUSDT').toUpperCase(); setSymbolStr(val); try{ localStorage.setItem('symbol', val) }catch{}; setShowSymbolList(false); updateLastPrice(null,'select', val); }} style={{padding:'8px 10px',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,0.02)'}}>
+                              <div key={s} onClick={() => { const val = String(s||'BTCUSDT').toUpperCase(); setSymbolStr(val); try{ localStorage.setItem('symbol', val) }catch{}; }} style={{padding:'8px 10px',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,0.02)'}}>
                                 {s}
                               </div>
                             ))

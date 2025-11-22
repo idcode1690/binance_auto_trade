@@ -1,40 +1,435 @@
 Dev backend listening on http://localhost:3000
-WS client connected: ::1
-WS msg: {"type":"get_snapshot"}
 Stopped REST polling; using user data stream
 Market trade WS connected for BTCUSDT
 User data WS connected
-Heartbeat: process alive — 2025-11-22T12:12:55.796Z PID: 31680
+WS client connected: ::1
+WS msg: {"type":"get_snapshot"}
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
 WS client disconnected
 WS client connected: ::ffff:127.0.0.1
 WS msg: {"type":"get_snapshot"}
-Heartbeat: process alive — 2025-11-22T12:13:05.800Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:13:15.813Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:13:25.825Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:13:35.833Z PID: 31680
-WS client disconnected
-WS client connected: ::ffff:127.0.0.1
-WS msg: {"type":"get_snapshot"}
-Heartbeat: process alive — 2025-11-22T12:13:45.838Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:13:55.843Z PID: 31680
-/symbols requested from ::1 ua=Mozilla/5.0 (Windows NT; Windows NT 10.0; ko-KR) WindowsPowerShell/5.1.26100.7019 q={"quote":"USDT","contractType":"PERPETUAL","status":"TRADING"}
-Heartbeat: process alive — 2025-11-22T12:14:05.855Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:14:15.861Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:14:25.865Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:14:35.880Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:14:45.887Z PID: 31680
-WS client disconnected
-WS client connected: ::ffff:127.0.0.1
-WS msg: {"type":"get_snapshot"}
-Heartbeat: process alive — 2025-11-22T12:14:55.898Z PID: 31680
-WS client connected: ::ffff:127.0.0.1
-WS msg: {"type":"get_snapshot"}
-Heartbeat: process alive — 2025-11-22T12:15:05.904Z PID: 31680
+Heartbeat: process alive — 2025-11-22T12:50:09.069Z PID: 32700
 WS client disconnected
 WS client connected: ::ffff:127.0.0.1
 WS msg: {"type":"get_snapshot"}
 WS client disconnected
-Heartbeat: process alive — 2025-11-22T12:15:15.917Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:15:25.929Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:15:35.943Z PID: 31680
-Heartbeat: process alive — 2025-11-22T12:15:45.956Z PID: 31680
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:50:19.080Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:50:29.087Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:50:39.103Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:50:49.110Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:50:59.110Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:51:09.124Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:51:19.133Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:51:29.148Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:51:39.163Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:51:49.167Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:51:59.171Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:52:09.178Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:52:19.194Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:52:29.200Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:52:39.204Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:52:49.207Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:52:59.210Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:53:09.215Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:53:19.216Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:53:29.221Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:53:39.227Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:53:49.232Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:53:59.244Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:54:09.260Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:54:19.269Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:54:29.283Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:54:39.286Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:54:49.292Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:54:59.294Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:55:09.303Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:55:19.316Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:55:29.323Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:55:39.325Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:55:49.336Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:55:59.344Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:56:09.355Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:56:19.361Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:56:29.366Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:56:39.375Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:56:49.376Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:56:59.378Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:57:09.391Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:57:19.399Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:57:29.410Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:57:39.412Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:57:49.421Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:57:59.426Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:58:09.434Z PID: 32700
+WS client disconnected
+Heartbeat: process alive — 2025-11-22T12:58:19.446Z PID: 32700
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:58:29.459Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:58:39.468Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:58:49.482Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:58:59.485Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T12:59:09.492Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:59:19.504Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:59:29.506Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:59:39.509Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:59:49.522Z PID: 32700
+Heartbeat: process alive — 2025-11-22T12:59:59.531Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:00:09.538Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:00:19.538Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:00:29.546Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:00:39.546Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:00:49.562Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:00:59.572Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:01:09.577Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:01:19.584Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:01:29.591Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:01:39.605Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:01:49.619Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:01:59.622Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:02:09.622Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:02:19.637Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:02:29.646Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:02:39.649Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:02:49.652Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:02:59.654Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:03:09.654Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:03:19.661Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:03:29.670Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:03:39.677Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:03:49.687Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:03:59.699Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:04:09.699Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:04:19.701Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:04:29.704Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:04:39.711Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:04:49.719Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:04:59.735Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:05:09.747Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:05:19.752Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:05:29.765Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:05:39.770Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:05:49.771Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:05:59.780Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:06:09.782Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:06:19.787Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:06:29.792Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+Heartbeat: process alive — 2025-11-22T13:06:39.794Z PID: 32700
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:06:49.805Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:06:59.812Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:07:09.818Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:07:19.823Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:07:29.839Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:07:39.840Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:07:49.852Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:07:59.858Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:08:09.864Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:08:19.869Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:08:29.877Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:08:39.887Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:08:49.897Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:08:59.905Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:09:09.914Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:09:19.926Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:09:29.937Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:09:39.943Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:09:49.955Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:09:59.966Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:10:09.977Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:10:19.991Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:10:29.997Z PID: 32700
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T13:10:40.006Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:10:50.016Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:11:00.019Z PID: 32700
+Heartbeat: process alive — 2025-11-22T13:11:10.025Z PID: 32700

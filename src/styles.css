@@ -306,6 +306,18 @@ body {
   box-shadow: 0 8px 28px rgba(0,0,0,0.6);
   overflow: hidden;
 }
+.symbol-picker .picker-close {
+  position: static;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.symbol-picker .picker-close:hover { background: rgba(255,255,255,0.02); color: var(--text); }
 .symbol-picker .theme-input { width: calc(100% - 16px); }
 .symbol-picker div[role="option"] { padding: 8px 10px; cursor: pointer }
 .symbol-picker div[role="option"]:hover { background: rgba(255,255,255,0.02) }
