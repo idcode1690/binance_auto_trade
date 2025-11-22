@@ -266,8 +266,21 @@ export default function App() {
   }
   
   // Send a test on-cross alert to the server
+  // Determine backend base URL.
+  // Priority:
+  // 1. Vite env var `VITE_API_BASE` (set at build time for GitHub Pages / production)
+  // 2. During local dev (vite dev server on :5173) -> http://localhost:3000
+  // 3. Fallback: '' (same origin)
   function apiBase() {
-    // during Vite dev the frontend runs on :5173 and backend on :3000
+    try {
+      // Vite provides import.meta.env for static build-time vars
+      try {
+        if (import.meta && import.meta.env && import.meta.env.VITE_API_BASE) {
+          const v = String(import.meta.env.VITE_API_BASE || '').trim();
+          if (v) return v.replace(/\/$/, '');
+        }
+      } catch (e) {}
+    } catch (e) {}
     try {
       if (typeof window !== 'undefined' && window.location && window.location.port === '5173') return 'http://localhost:3000';
     } catch (e) {}

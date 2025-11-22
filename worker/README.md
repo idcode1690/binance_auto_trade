@@ -1,3 +1,28 @@
+# Cloudflare Worker for binance_auto_trade
+
+This Worker provides a simple `/webhook/oncross` endpoint that:
+
+- accepts POST JSON payloads from the frontend
+- validates `x-webhook-secret` header against `WEBHOOK_SECRET` secret
+- forwards the alert to Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` required)
+- optionally places a Binance Futures market order when `AUTO_ORDER_ENABLED=true` and `BINANCE_API_KEY`/`BINANCE_API_SECRET` are set
+
+Deployment
+1. Install `wrangler`: `npm install -g wrangler`
+2. Login: `wrangler login` (opens Cloudflare auth)
+3. Configure `wrangler.toml` (set `account_id`, optionally `route`/`zone_id`)
+4. Register secrets:
+   - `wrangler secret put WEBHOOK_SECRET`
+   - `wrangler secret put TELEGRAM_BOT_TOKEN`
+   - `wrangler secret put TELEGRAM_CHAT_ID`
+   - if using orders: `wrangler secret put BINANCE_API_KEY` and `wrangler secret put BINANCE_API_SECRET`
+   - optional: `wrangler secret put AUTO_ORDER_ENABLED` (true/false) and `wrangler secret put ORDER_USDT`
+5. Publish: `wrangler publish` (or `wrangler publish --env production` if using env)
+
+Notes
+- Do NOT commit secret values to the repository. Use `wrangler secret` to store them.
+- Test with a POST to the Worker URL returned by `wrangler publish`.
+- The Worker uses Web Crypto to compute HMAC-SHA256 for Binance signature.
 # Cloudflare Worker 설정 및 실행 방법
 
 ## 1. 환경 변수 설정

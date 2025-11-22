@@ -1,0 +1,56 @@
+Dev backend listening on http://localhost:3000
+Stopped REST polling; using user data stream
+Market trade WS connected for BTCUSDT
+User data WS connected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T14:33:06.697Z PID: 12816
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T14:33:16.711Z PID: 12816
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T14:33:26.712Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:33:36.728Z PID: 12816
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T14:33:46.738Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:33:56.746Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:34:06.757Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:34:16.766Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:34:26.782Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:34:36.784Z PID: 12816
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T14:34:46.793Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:34:56.806Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:35:06.821Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:35:16.824Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:35:26.825Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:35:36.835Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:35:46.843Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:35:56.857Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:36:06.869Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:36:16.868Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:36:26.881Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:36:36.894Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:36:46.894Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:36:56.904Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:37:06.915Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:37:16.924Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:37:26.933Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:37:36.948Z PID: 12816
+WS client disconnected
+WS client connected: ::ffff:127.0.0.1
+WS msg: {"type":"get_snapshot"}
+Heartbeat: process alive — 2025-11-22T14:37:46.951Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:37:56.952Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:38:06.964Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:38:16.975Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:38:26.985Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:38:36.994Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:38:47.003Z PID: 12816
+Heartbeat: process alive — 2025-11-22T14:38:57.013Z PID: 12816

@@ -1,1 +1,68 @@
 [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+[2m오후 11:34:31[22m [31m[1m[vite][22m[39m [31mInternal server error: C:\Users\e1it3\Desktop\program\binance_auto_trade\src\App.jsx: `import` can only be used in `import()` or `import.meta`. (277:17)
+
+[0m [90m 275 |[31m     [36mtry[31m {
+ [90m 276 |[31m       [90m// Vite provides import.meta.env for static build-time vars[31m
+[31m[1m>[22m[31m[90m 277 |[31m       [36mif[31m ([36mtypeof[31m [36mimport[31m [33m!==[31m [32m'undefined'[31m [33m&&[31m [36mtypeof[31m [36mimport[31m[33m.[31mmeta [33m!==[31m [32m'undefined'[31m [33m&&[31m [36mimport[31m[33m.[31mmeta[33m.[31menv [33m&&[31m [36mimport[31m[33m.[31mmeta[33m.[31menv[33m.[31m[33mVITE_API_BASE[31m) {
+ [90m     |[31m                  [31m[1m^[22m[31m
+ [90m 278 |[31m         [36mconst[31m v [33m=[31m [33mString[31m([36mimport[31m[33m.[31mmeta[33m.[31menv[33m.[31m[33mVITE_API_BASE[31m [33m||[31m [32m''[31m)[33m.[31mtrim()[33m;[31m
+ [90m 279 |[31m         [36mif[31m (v) [36mreturn[31m v[33m.[31mreplace([35m/\/$/[31m[33m,[31m [32m''[31m)[33m;[31m
+ [90m 280 |[31m       }[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36mC:/Users/e1it3/Desktop/program/binance_auto_trade/src/App.jsx[39m:277:17
+[33m  281|      } catch (e) {}
+  282|      try {
+  283|        if (typeof window !== 'undefined' && window.location && window.location.port === '5173') return 'http://localhost:3000';
+     |           ^
+  284|      } catch (e) {}
+  285|      return '';[39m
+      at constructor (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:367:19)
+      at JSXParserMixin.raise (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:6624:19)
+      at JSXParserMixin.parseExprAtom (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:11363:16)
+      at JSXParserMixin.parseExprAtom (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:4793:20)
+      at JSXParserMixin.parseExprSubscripts (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnary (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:11093:28)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10895:21)
+      at JSXParserMixin.parseExpressionBase (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10848:23)
+      at C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10844:39
+      at JSXParserMixin.allowInAnd (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12495:16)
+      at JSXParserMixin.parseExpression (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:10844:17)
+      at JSXParserMixin.parseHeaderExpression (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13108:22)
+      at JSXParserMixin.parseIfStatement (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13205:22)
+      at JSXParserMixin.parseStatementContent (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12872:21)
+      at JSXParserMixin.parseStatementLike (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12843:17)
+      at JSXParserMixin.parseStatementListItem (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12823:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13392:61)
+      at JSXParserMixin.parseBlockBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13385:10)
+      at JSXParserMixin.parseBlock (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13373:10)
+      at JSXParserMixin.parseTryStatement (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13281:23)
+      at JSXParserMixin.parseStatementContent (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12880:21)
+      at JSXParserMixin.parseStatementLike (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12843:17)
+      at JSXParserMixin.parseStatementListItem (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12823:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13392:61)
+      at JSXParserMixin.parseBlockBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13385:10)
+      at JSXParserMixin.parseBlock (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13373:10)
+      at JSXParserMixin.parseFunctionBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12174:24)
+      at JSXParserMixin.parseFunctionBodyAndFinish (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12160:10)
+      at C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13521:12
+      at JSXParserMixin.withSmartMixTopicForbiddingContext (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12477:14)
+      at JSXParserMixin.parseFunction (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13520:10)
+      at JSXParserMixin.parseFunctionStatement (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13201:17)
+      at JSXParserMixin.parseStatementContent (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12867:21)
+      at JSXParserMixin.parseStatementLike (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12843:17)
+      at JSXParserMixin.parseStatementListItem (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12823:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13392:61)
+      at JSXParserMixin.parseBlockBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13385:10)
+      at JSXParserMixin.parseBlock (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13373:10)
+      at JSXParserMixin.parseFunctionBody (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12174:24)
+      at JSXParserMixin.parseFunctionBodyAndFinish (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12160:10)
+      at C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13521:12
+      at JSXParserMixin.withSmartMixTopicForbiddingContext (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:12477:14)
+      at JSXParserMixin.parseFunction (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13520:10)
+      at JSXParserMixin.parseExportDefaultExpression (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13983:19)
+      at JSXParserMixin.parseExport (C:\Users\e1it3\Desktop\program\binance_auto_trade\node_modules\@babel\parser\lib\index.js:13904:25)

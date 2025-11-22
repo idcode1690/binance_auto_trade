@@ -1,4 +1,18 @@
 name = "binance-auto-trade-worker"
+main = "worker.js"
+compatibility_date = "2025-11-22"
+
+# Set your account_id when deploying. You can leave it blank for now and configure in Cloudflare dashboard or during wrangler publish.
+account_id = ""
+
+type = "javascript"
+
+workers_dev = true
+
+[env.production]
+route = ""
+zone_id = ""
+name = "binance-auto-trade-worker"
 main = "index.js"
 compatibility_date = "2025-11-18"
 
