@@ -1,5 +1,14 @@
 [
   {
+    "id": 1763822366936,
+    "symbol": "BTCUSDT",
+    "type": "bull",
+    "price": 84612.12,
+    "time": 1763822366931,
+    "msg": "EMA Cross Test from client for BTCUSDT",
+    "receivedAt": 1763822366936
+  },
+  {
     "id": 1763822019687,
     "symbol": "BTCUSDT",
     "type": "bull",
