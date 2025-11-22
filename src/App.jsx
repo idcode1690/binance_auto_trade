@@ -128,6 +128,15 @@ export default function App() {
     const bal = account && typeof account.displayTotalWalletBalance !== 'undefined' ? Number(account.displayTotalWalletBalance) : (account && typeof account.totalWalletBalance !== 'undefined' ? Number(account.totalWalletBalance) : Number(futuresBalanceStr || 0))
     const upl = account && typeof account.displayTotalUnrealizedProfit !== 'undefined' ? Number(account.displayTotalUnrealizedProfit) : (account && typeof account.totalUnrealizedProfit !== 'undefined' ? Number(account.totalUnrealizedProfit) : 0)
     const uplPos = upl >= 0
+    // Margin Balance = 증거금 + 미실현수익
+    const margin = (
+      (account && typeof account.totalMarginBalance !== 'undefined' && account.totalMarginBalance !== null
+        ? Number(account.totalMarginBalance)
+        : account && typeof account.totalWalletBalance !== 'undefined' && account.totalWalletBalance !== null
+          ? Number(account.totalWalletBalance)
+          : 0)
+      + (account && typeof account.totalUnrealizedProfit !== 'undefined' ? Number(account.totalUnrealizedProfit) : 0)
+    );
     return (
       <div className="account-card">
         <div className="account-row account-top">
@@ -141,56 +150,10 @@ export default function App() {
             <div className="upl-label">Unrealized P/L</div>
           </div>
         </div>
-          <div className="account-row account-bottom">
-            <div className="account-sub">Margin Balance</div>
-            <div className="account-balance">
-              {(() => {
-                // prefer explicit top-level field
-                if (account && typeof account.totalMarginBalance !== 'undefined' && account.totalMarginBalance !== null) {
-                  return formatPrice(Number(account.totalMarginBalance))
-                }
-                if (account && typeof account.availableBalance !== 'undefined' && account.availableBalance !== null) {
-                  return formatPrice(Number(account.availableBalance))
-                }
-                // next fallback: use totalWalletBalance (user deposit/wallet) if present
-                if (account && typeof account.totalWalletBalance !== 'undefined' && account.totalWalletBalance !== null) {
-                  return formatPrice(Number(account.totalWalletBalance))
-                }
-                // fallback to local stored futures balance (from earlier successful fetches)
-                try {
-                  const stored = Number(futuresBalanceStr || 0)
-                  if (stored && stored > 0) return formatPrice(stored)
-                } catch (e) {}
-                // final attempt: estimate margin balance from positions
-                try {
-                  if (account && Array.isArray(account.positions) && account.positions.length) {
-                    let sum = 0
-                    for (const p of account.positions) {
-                      if (!p) continue
-                      const init = Number(p.positionInitialMargin || 0) || 0
-                      if (init && init > 0) { sum += init; continue }
-                      // isolatedWallet if present
-                      if (typeof p.isolatedWallet !== 'undefined' && p.isolatedWallet !== null) {
-                        const iso = Number(p.isolatedWallet) || 0
-                        if (iso && iso > 0) { sum += iso; continue }
-                      }
-                      // last resort: estimate from notional / leverage
-                      const amt = Math.abs(Number(p.positionAmt) || 0)
-                      const price = Number(p.markPrice || p.entryPrice || 0) || 0
-                      const lev = p.leverage ? Number(p.leverage) : 0
-                      if (amt > 0 && price > 0 && lev > 0) {
-                        const notional = amt * price
-                        const used = notional / lev
-                        if (isFinite(used)) sum += used
-                      }
-                    }
-                    if (sum > 0) return formatPrice(sum)
-                  }
-                } catch (e) {}
-                return '—'
-              })()}
-            </div>
-          </div>
+        <div className="account-row account-bottom">
+          <div className="account-sub">Margin Balance</div>
+          <div className="account-balance">{formatPrice(margin)}</div>
+        </div>
       </div>
     )
   }
@@ -464,71 +427,66 @@ export default function App() {
                           <div style={{flex:1,textAlign:'right'}}>PNL (ROI %)</div>
                           <div style={{flex:1,textAlign:'right'}}>Margin Type</div>
                         </div>
-                        {open.map(p => {
+                          {open.map(p => {
                           const amt = Number(p.positionAmt) || 0
                           const entry = Number(p.entryPrice) || 0
                           // prefer live `lastPrice` (from chart trades) first so UPL moves with price ticks,
-                          // then server-provided `markPrice`, then entry price
-                          const mark = (isFinite(Number(lastPrice)) ? Number(lastPrice) : (typeof p.markPrice !== 'undefined' && p.markPrice !== null ? Number(p.markPrice) : (entry || 0)))
+                          // then server-provided `markPrice`, then indexPrice, then entry price
+                          const mark = (isFinite(Number(lastPrice)) ? Number(lastPrice) : (typeof p.markPrice !== 'undefined' && p.markPrice !== null ? Number(p.markPrice) : (typeof p.indexPrice !== 'undefined' && p.indexPrice ? Number(p.indexPrice) : (entry || 0))))
 
-                          // compute unrealized PnL using mark price (more consistent with Binance)
+                          // compute unrealized PnL using mark price (closer to Binance)
                           const computedUpl = (mark - entry) * amt
-                          // also consider index price if Binance provides it (sometimes used for PNL/liq)
-                          const indexPrice = Number(p.indexPrice) || 0
+                          const indexPrice = (typeof p.indexPrice !== 'undefined' ? Number(p.indexPrice) : 0)
                           const indexUsed = indexPrice || mark
                           const computedUplIndex = (indexUsed - entry) * amt
                           // prefer explicit server-provided unrealizedProfit if present
                           const upl = (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? Number(p.unrealizedProfit) : computedUpl
 
-                          // prefer explicit initial margin fields when available
+                          // margin / leverage / notional
                           const initMargin = Number(p.positionInitialMargin || p.initialMargin || 0) || 0
-                          const lev = p.leverage ? Number(p.leverage) : undefined
-                          // compute notional using mark price (closer to Binance's view)
-                          const notional = (Math.abs(amt) * mark) || 0
+                          const lev = (typeof p.leverage !== 'undefined' && p.leverage !== null) ? Number(p.leverage) : (typeof p.leverageUsed !== 'undefined' ? Number(p.leverageUsed) : undefined)
+                          const notional = (Math.abs(amt) * (mark || entry || 0)) || 0
 
+                          // determine used margin: prefer explicit initialMargin, otherwise estimate from notional/leverage
+                          let usedMargin = 0
+                          if (initMargin > 0) usedMargin = initMargin
+                          else if (lev && notional > 0) usedMargin = notional / lev
+                          else usedMargin = 0
+
+                          // compute ROI safely
                           let roiPct = null
-                          let roiIndexPct = null
-                          if (initMargin && initMargin > 0) {
-                            roiPct = (upl / initMargin) * 100
-                            roiIndexPct = ( (typeof p.unrealizedProfit !== 'undefined' && p.unrealizedProfit !== null) ? (Number(p.unrealizedProfit) / initMargin) * 100 : (computedUplIndex / initMargin) * 100 )
-                          } else if (lev && notional > 0) {
-                            const usedMargin = notional / lev
-                            if (usedMargin > 0) {
-                              roiPct = (upl / usedMargin) * 100
-                              roiIndexPct = (computedUplIndex / usedMargin) * 100
-                            }
-                          } else if (lev && entry && Math.abs(amt) > 0) {
-                            // last resort: estimate used margin from entry price if mark not available
-                            const fallbackNotional = Math.abs(amt) * entry
-                            const used = fallbackNotional / (lev || 1)
-                            if (used > 0) {
-                              roiPct = (upl / used) * 100
-                              roiIndexPct = (computedUplIndex / used) * 100
-                            }
+                          if (usedMargin > 0) {
+                            roiPct = (upl / usedMargin) * 100
                           }
 
                           const isPos = upl >= 0
                           const pnlClass = isPos ? 'pnl-pos' : 'pnl-neg'
-                          // display values: show markPrice for live consistency
+
+                          // display helper values
+                          const displayLev = lev || '—'
+                          const displaySize = Math.abs(amt) || 0
+                          const assetSymbol = String(p.symbol || p._raw && p._raw.symbol || '').replace(/USDT$/,'')
+                          const displayEntry = entry ? formatPrice(entry) : '—'
+                          const displayMargin = usedMargin > 0 ? `${formatPrice(usedMargin)} USDT` : '—'
+                          const displayPnl = `${upl >= 0 ? '+' : ''}${Number(upl || 0).toFixed(4)} USDT`
+                          const displayRoi = roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${Number(roiPct).toFixed(2)}%)` : '(—)'
+                          const displayMarginType = p.marginType ? (String(p.marginType).toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'
+
                           return (
                             <div key={p.symbol + String(p.positionAmt) + String(p.entryPrice)} style={{display:'flex',gap:12,padding:'8px 6px',alignItems:'center',fontSize:13,borderTop:'1px solid rgba(0,0,0,0.04)'}}>
-                              <div style={{flex:1.2}}>{p.symbol}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{lev || '—'}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{Math.abs(amt)} {String(p.symbol).replace(/USDT$/,'')}</div>
-                              <div style={{flex:1,textAlign:'right'}}>{entry ? entry.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</div>
+                              <div style={{flex:1.2}}>{p.symbol || '—'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{displayLev}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{displaySize} {assetSymbol}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{displayEntry}</div>
                               <div style={{flex:1.2,textAlign:'right'}}>
-                                {initMargin ? (
-                                  <div>
-                                    <div style={{fontWeight:400}}>{initMargin.toFixed(4)} USDT</div>
-                                    <div style={{fontSize:12,color:'var(--muted)'}}>{notional ? `(${((initMargin / notional)*100).toFixed(2)}%)` : '(—)'}</div>
-                                  </div>
-                                ) : '—'}
+                                {displayMargin
+                                }
                               </div>
                               <div className={"pnl-cell " + pnlClass} style={{flex:1,textAlign:'right'}}>
-                                <div className="pnl-amount">{upl >= 0 ? '+' : ''}{Number(upl || 0).toFixed(4)} USDT</div>
-                                <div className="pnl-percent">{roiPct != null ? `(${roiPct >= 0 ? '+' : ''}${Number(roiPct).toFixed(2)}%)` : '(—)'}</div>
+                                <div className="pnl-amount">{displayPnl}</div>
+                                <div className="pnl-percent">{displayRoi}</div>
                               </div>
-                              <div style={{flex:1,textAlign:'right'}}>{p.marginType ? (p.marginType.toUpperCase() === 'ISOLATED' ? '(Isolated)' : '(Cross)') : '(Cross)'}</div>
+                              <div style={{flex:1,textAlign:'right'}}>{displayMarginType}</div>
                             </div>
                           )
                         })}
