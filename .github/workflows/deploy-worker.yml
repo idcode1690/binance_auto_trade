@@ -1,0 +1,42 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install wrangler
+        run: npm install -g @cloudflare/wrangler
+
+      - name: Publish Worker and set secrets
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -e
+          cd worker
+          # Conditionally set secrets if provided in GitHub repository secrets
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then printf '%s' "${{ secrets.TELEGRAM_BOT_TOKEN }}" | wrangler secret put TELEGRAM_BOT_TOKEN --account-id "${CF_ACCOUNT_ID}"; fi
+          if [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then printf '%s' "${{ secrets.TELEGRAM_CHAT_ID }}" | wrangler secret put TELEGRAM_CHAT_ID --account-id "${CF_ACCOUNT_ID}"; fi
+          if [ -n "${{ secrets.BINANCE_API_KEY }}" ]; then printf '%s' "${{ secrets.BINANCE_API_KEY }}" | wrangler secret put BINANCE_API_KEY --account-id "${CF_ACCOUNT_ID}"; fi
+          if [ -n "${{ secrets.BINANCE_API_SECRET }}" ]; then printf '%s' "${{ secrets.BINANCE_API_SECRET }}" | wrangler secret put BINANCE_API_SECRET --account-id "${CF_ACCOUNT_ID}"; fi
+          if [ -n "${{ secrets.WEBHOOK_SECRET }}" ]; then printf '%s' "${{ secrets.WEBHOOK_SECRET }}" | wrangler secret put WEBHOOK_SECRET --account-id "${CF_ACCOUNT_ID}"; fi
+          if [ -n "${{ secrets.AUTO_ORDER_ENABLED }}" ]; then printf '%s' "${{ secrets.AUTO_ORDER_ENABLED }}" | wrangler secret put AUTO_ORDER_ENABLED --account-id "${CF_ACCOUNT_ID}"; fi
+          if [ -n "${{ secrets.ORDER_USDT }}" ]; then printf '%s' "${{ secrets.ORDER_USDT }}" | wrangler secret put ORDER_USDT --account-id "${CF_ACCOUNT_ID}"; fi
+
+          # Publish the worker
+          wrangler publish --account-id "${CF_ACCOUNT_ID}"
