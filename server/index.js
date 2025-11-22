@@ -534,6 +534,156 @@ app.get('/symbols', async (req, res) => {
 // Provide a simple HTTP health endpoint
 app.get('/health', (req, res) => res.send('OK'));
 
+// In-memory alerts store (also persisted to disk for resilience)
+const fs = require('fs');
+const path = require('path');
+const ALERTS_FILE = path.resolve(__dirname, '..', 'alerts.json');
+let alertsStore = [];
+try {
+	if (fs.existsSync(ALERTS_FILE)) {
+		const raw = fs.readFileSync(ALERTS_FILE, 'utf8');
+		alertsStore = JSON.parse(raw || '[]');
+	}
+} catch (e) {
+	console.warn('Could not load alerts file', e && e.message ? e.message : e);
+}
+
+// Helper: persist alerts to disk (best-effort)
+function persistAlerts() {
+	try {
+		fs.writeFileSync(ALERTS_FILE, JSON.stringify(alertsStore.slice(0, 1000), null, 2), 'utf8');
+	} catch (e) {
+		console.warn('persistAlerts failed', e && e.message ? e.message : e);
+	}
+}
+
+// Forward alert to Telegram if configured
+async function forwardToTelegram(text) {
+	const token = process.env.TELEGRAM_BOT_TOKEN;
+	const chatId = process.env.TELEGRAM_CHAT_ID;
+	if (!token || !chatId) return { ok: false, reason: 'missing_credentials' };
+	try {
+		const url = `https://api.telegram.org/bot${token}/sendMessage`;
+		const res = await axios.post(url, { chat_id: chatId, text }, { timeout: 10000 });
+		return res.data;
+	} catch (e) {
+		console.error('Telegram forward error', e && e.response ? e.response.data : e.message || e);
+		return { ok: false, reason: e && e.message ? e.message : 'error' };
+	}
+}
+
+// Helper: place a Binance Futures market order (signed request)
+const crypto = require('crypto');
+async function placeFuturesMarketOrder(symbol, side, quantity) {
+	// minimal wrapper using Binance Futures REST API with HMAC signature
+	const key = process.env.BINANCE_API_KEY;
+	const secret = process.env.BINANCE_API_SECRET;
+	if (!key || !secret) throw new Error('missing_binance_credentials');
+	if (!symbol || !side || !quantity) throw new Error('invalid_order_params');
+	const endpoint = 'https://fapi.binance.com/fapi/v1/order';
+	const params = {
+		symbol: String(symbol).toUpperCase(),
+		side: String(side).toUpperCase(),
+		type: 'MARKET',
+		quantity: String(quantity),
+		timestamp: Date.now(),
+		recvWindow: 60000
+	};
+	const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
+	const signature = crypto.createHmac('sha256', secret).update(qs).digest('hex');
+	const url = `${endpoint}?${qs}&signature=${signature}`;
+	const headers = { 'X-MBX-APIKEY': key };
+	const resp = await axios.post(url, null, { headers, timeout: 15000 });
+	return resp && resp.data ? resp.data : resp;
+}
+
+// Helper: fetch current price if payload didn't include a price
+async function fetchMarketPrice(symbol) {
+	try {
+		const url = 'https://fapi.binance.com/fapi/v1/ticker/price';
+		const res = await axios.get(url, { params: { symbol: String(symbol).toUpperCase() }, timeout: 10000 });
+		if (res && res.data && (res.data.price || res.data.price === 0)) return Number(res.data.price);
+		if (res && res.data && res.data.length && res.data[0] && res.data[0].price) return Number(res.data[0].price);
+	} catch (e) {
+		console.warn('fetchMarketPrice failed', e && e.response ? e.response.data : e.message || e);
+	}
+	return null;
+}
+
+// POST webhook for receiving EMA cross alerts from clients
+app.post('/webhook/oncross', async (req, res) => {
+	try {
+		const body = req.body || {};
+		const symbol = String(body.symbol || body.sym || 'unknown').toUpperCase();
+		const type = String(body.type || body.cross || body.signal || 'info');
+		const price = (typeof body.price !== 'undefined') ? Number(body.price) : null;
+		const time = body.time ? Number(body.time) : Date.now();
+		const msg = body.msg || `EMA ${type} on ${symbol} at ${price}`;
+
+		const alert = { id: Date.now(), symbol, type, price, time, msg, receivedAt: Date.now() };
+		alertsStore.unshift(alert);
+		// keep size bounded
+		if (alertsStore.length > 1000) alertsStore = alertsStore.slice(0, 1000);
+		// persist (best-effort, sync)
+		persistAlerts();
+
+		// try forwarding to Telegram (non-blocking for client)
+		let tgResult = null;
+		try {
+			tgResult = await forwardToTelegram(`${type.toUpperCase()} alert for ${symbol}: ${msg} — price: ${price || 'N/A'}`);
+		} catch (e) {
+			tgResult = { ok: false, reason: e && e.message ? e.message : 'forward_error' };
+		}
+
+		// Optionally place a Binance Futures market order when enabled via env
+		// NOTE: This is gated by server-side AUTO_ORDER_ENABLED to avoid accidental live orders.
+		let orderResult = null;
+		let orderError = null;
+		try {
+			const autoOrderEnabled = String(process.env.AUTO_ORDER_ENABLED || '').toLowerCase() === 'true';
+			if (autoOrderEnabled) {
+				// Determine USDT notional to use (env or default)
+				const usdtNotional = Number(process.env.ORDER_USDT) || 100;
+				// Determine price: prefer provided price, else fetch market price
+				let usedPrice = (typeof price === 'number' && isFinite(price) && price > 0) ? price : null;
+				if (!usedPrice) usedPrice = await fetchMarketPrice(symbol);
+				if (usedPrice && usedPrice > 0) {
+					// compute quantity with modest rounding
+					const qty = Math.floor((usdtNotional / usedPrice) * 1e6) / 1e6;
+					if (qty > 0) {
+						const side = (String(type || '').toLowerCase() === 'bull') ? 'BUY' : (String(type || '').toLowerCase() === 'bear' ? 'SELL' : null);
+						if (side) {
+							try {
+								orderResult = await placeFuturesMarketOrder(symbol, side, qty);
+							} catch (e) {
+								orderError = (e && e.response && e.response.data) ? e.response.data : (e && e.message ? e.message : String(e));
+							}
+						} else {
+							orderError = 'unsupported_cross_type_for_order';
+						}
+					} else {
+						orderError = 'computed_quantity_zero';
+					}
+				} else {
+					orderError = 'could_not_determine_price';
+				}
+			}
+		} catch (e) {
+			orderError = e && e.message ? e.message : String(e);
+		}
+
+		return res.json({ ok: true, alert, telegram: tgResult, order: orderResult, orderError: orderError });
+	} catch (e) {
+		console.error('POST /webhook/oncross error', e && e.stack ? e.stack : e);
+		return res.status(500).json({ ok: false, error: String(e) });
+	}
+});
+
+// GET list of recent alerts
+app.get('/alerts', (req, res) => {
+	res.json({ count: alertsStore.length, alerts: alertsStore.slice(0, 200) });
+});
+
 const server = http.createServer(app);
 
 // WebSocket server (for dev only) - exposes a single endpoint at /ws/account

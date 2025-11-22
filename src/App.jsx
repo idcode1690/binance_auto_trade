@@ -264,6 +264,66 @@ export default function App() {
       setSymbolsLoading(false);
     }
   }
+  
+  // Send a test on-cross alert to the server
+  function apiBase() {
+    // during Vite dev the frontend runs on :5173 and backend on :3000
+    try {
+      if (typeof window !== 'undefined' && window.location && window.location.port === '5173') return 'http://localhost:3000';
+    } catch (e) {}
+    return '';
+  }
+
+  async function sendOnCrossTest() {
+    try {
+      // Respect auto-order toggle: only allow test when auto-ordering is enabled
+      if (!autoOrderEnabled) {
+        try {
+          setAlerts(prev => [{ id: Date.now(), time: Date.now(), type: 'info', price: null, msg: 'Send Cross Test blocked: Auto Orders disabled' }, ...prev].slice(0, 200));
+        } catch (e) {}
+        return;
+      }
+      const payload = { symbol, type: 'bull', price: Number(lastPrice) || null, time: Date.now(), msg: `EMA Cross Test from client for ${symbol}` };
+      // Immediately simulate the cross locally so the UI updates without waiting for server
+      try { handleOnCross({ type: 'bull', price: payload.price, time: payload.time, msg: payload.msg }, { forward: false }); } catch (e) {}
+      const base = apiBase();
+      // send to server but do not show browser alert — UI already updated
+      fetch(base + '/webhook/oncross', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(e => console.error('sendOnCrossTest POST failed', e));
+    } catch (e) {
+      console.error('sendOnCrossTest error', e)
+    }
+  }
+
+  // Reusable onCross handler — can suppress server forwarding via opts.forward = false
+  function handleOnCross(c, opts = { forward: true, allowWhenDisabled: false }) {
+    try {
+      // If auto-ordering is disabled and caller hasn't requested bypass, ignore cross events
+      try {
+        if (!autoOrderEnabled && !(opts && opts.allowWhenDisabled)) {
+          // intentionally ignore when auto-order is off
+          return
+        }
+      } catch (e) {}
+      const crossObj = { id: Date.now(), time: c.time || Date.now(), type: c.type || 'bull', price: (typeof c.price !== 'undefined' ? c.price : lastPrice), msg: c.msg || `Simulated ${c.type || 'bull'} cross` };
+      setAlerts(prev => [{ id: Date.now(), ...crossObj }, ...prev].slice(0, 200));
+      try {
+        const side = crossObj.type === 'bull' ? 'BUY' : 'SELL';
+        const usdt = 100;
+        const priceNum = Number(crossObj.price) || Number(lastPrice) || 0;
+        let qty = 0;
+        if (priceNum > 0) qty = Math.floor((usdt / priceNum) * 1e6) / 1e6;
+        const orderEntry = { id: Date.now(), symbol: String(symbol || 'BTCUSDT'), side, quantity: qty > 0 ? String(qty) : '0', usdt, time: crossObj.time || Date.now(), status: 'simulated', source: 'cross' };
+        setOrders(prev => { const next = [orderEntry, ...prev].slice(0, 200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next });
+      } catch (e) {}
+      // send to server webhook in background (do not block UI) unless explicitly suppressed
+      if (opts && opts.forward !== false) {
+        try {
+          const base = apiBase();
+          fetch(base + '/webhook/oncross', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, type: crossObj.type, price: crossObj.price, time: crossObj.time, msg: crossObj.msg }) }).catch(err => console.error('forward oncross failed', err));
+        } catch (e) {}
+      }
+    } catch (e) { console.error('handleOnCross error', e) }
+  }
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
@@ -531,32 +591,12 @@ export default function App() {
                       )
                     })
                   })()}
+                  {/* quick test button next to Interval controls */}
+                  <button onClick={sendOnCrossTest} style={{marginLeft:8,padding:'6px 10px',borderRadius:6}}>Send Cross Test</button>
                 </div>
               </div>
               <ChartToggle
-                onCross={(c) => {
-                  // add cross alert
-                  setAlerts(prev => [{ id: Date.now(), ...c }, ...prev].slice(0, 200))
-                  try {
-                    // create a simulated order entry on cross so right column shows it
-                    const side = c.type === 'bull' ? 'BUY' : 'SELL'
-                    const usdt = 100 // default simulated USDT allocation
-                    const priceNum = Number(c.price) || Number(lastPrice) || 0
-                    let qty = 0
-                    if (priceNum > 0) qty = Math.floor((usdt / priceNum) * 1e6) / 1e6
-                    const orderEntry = {
-                      id: Date.now(),
-                      symbol: String(symbol || 'BTCUSDT'),
-                      side,
-                      quantity: qty > 0 ? String(qty) : '0',
-                      usdt,
-                      time: c.time || Date.now(),
-                      status: 'simulated',
-                      source: 'cross'
-                    }
-                    setOrders(prev => { const next = [orderEntry, ...prev].slice(0, 200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
-                  } catch (e) {}
-                }}
+                onCross={(c) => { handleOnCross(c) }}
                 onPrice={(p) => updateLastPrice(p, 'chart', symbol)}
                 emaShort={emaShort}
                 emaLong={emaLong}
