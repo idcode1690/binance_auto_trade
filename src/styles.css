@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+
 :root{
   /* VS Code-like Dark (black/gray) theme */
   --bg: #1e1e1e;      /* editor background */
@@ -17,8 +19,8 @@ html,body,#root{
 body {
   margin: 0;
   padding: 0;
-  /* nicer system stack with Inter/Segoe/Roboto fallback */
-  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Use Inter from Google Fonts with system fallbacks */
+  font-family: 'Inter', "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* slightly smaller, cleaner default text size */
   font-size: 13px;
   line-height: 1.35;
@@ -44,8 +46,19 @@ body {
 }
 .title {
   font-size:18px;
-  font-weight:700;
+  font-weight:800;
+  letter-spacing: -0.4px;
 }
+
+/* Hero title: slightly larger and heavier for better typography */
+.hero-title {
+  font-family: 'Inter', "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  margin: 0;
+}
+
+.hero-sub { color: var(--muted); margin: 0; font-size: 13px }
 .top-meta { color:var(--muted); font-size:13px }
 .price { font-size:36px; font-weight:700; color:var(--text) }
 
@@ -91,12 +104,6 @@ body {
   overflow: auto;
   height: 100%;
   box-shadow: 0 6px 22px rgba(0,0,0,0.45);
-}
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  overflow: auto;
 }
 .card.no-frame { background:transparent; border:none; padding:0 }
 
@@ -269,6 +276,39 @@ body {
 /* Tabs for Alerts / Orders */
 .tab { padding:6px 10px; border-radius:8px; background: rgba(255,255,255,0.02); color:var(--muted); border: 1px solid rgba(255,255,255,0.02); cursor:pointer }
 .tab.active { background: var(--accent); color: white; font-weight:700; border-color: rgba(0,0,0,0.06) }
+
+/* Interval buttons for selecting minutes/intervals */
+.interval-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.interval-btn:hover {
+  background: rgba(255,255,255,0.02);
+}
+.interval-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: rgba(0,0,0,0.06);
+}
+
+/* Symbol picker dropdown (anchored to symbol input) */
+.symbol-picker {
+  min-width: 220px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent), var(--card);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.symbol-picker .theme-input { width: calc(100% - 16px); }
+.symbol-picker div[role="option"] { padding: 8px 10px; cursor: pointer }
+.symbol-picker div[role="option"]:hover { background: rgba(255,255,255,0.02) }
 .orders-list { list-style:none; padding:0; margin:0 }
 .orders-list .alert-item { display:flex; justify-content:space-between; align-items:center }
 
@@ -337,6 +377,9 @@ body {
   gap: 8px;
   min-width: 0;
 }
+
+/* Modal overlay to display full symbol list */
+/* Modal removed — styles intentionally deleted */
 .account-row { display:flex; align-items:baseline; justify-content:space-between; gap:8px; min-width:0 }
 .account-title { font-size:13px; color:var(--muted); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .account-balance { font-size:20px; font-weight:800; color:var(--text); white-space:nowrap }

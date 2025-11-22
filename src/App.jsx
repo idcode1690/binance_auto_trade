@@ -75,6 +75,10 @@ export default function App() {
   const [symbolStr, setSymbolStr] = useState(() => {
     try { return localStorage.getItem('symbol') || 'BTCUSDT' } catch (e) { return 'BTCUSDT' }
   });
+  const [showSymbolList, setShowSymbolList] = useState(false);
+  const [symbolFilter, setSymbolFilter] = useState('');
+  const [symbolsList, setSymbolsList] = useState([]);
+  const [symbolsLoading, setSymbolsLoading] = useState(false);
   const emaShort = Math.max(1, parseInt(emaShortStr, 10) || 26);
   const emaLong = Math.max(1, parseInt(emaLongStr, 10) || 200);
   const minutes = Math.max(1, parseInt(minutesStr, 10) || 1);
@@ -159,6 +163,28 @@ export default function App() {
   }
 
   const wsRef = useRef(null)
+  const currentSymbolRef = useRef(symbol)
+  useEffect(() => { currentSymbolRef.current = symbol }, [symbol])
+
+  // Centralized lastPrice setter that validates source symbol and logs updates
+  const updateLastPrice = (val, src = 'unknown', srcSym = null) => {
+    try {
+      if (val === null || typeof val === 'undefined') {
+        setLastPrice(null)
+        return
+      }
+      const cur = currentSymbolRef.current || ''
+      if (srcSym) {
+        if (normalizeSym(srcSym) !== normalizeSym(cur)) {
+          // ignore price update for non-current symbol
+          return
+        }
+      }
+      // accept update
+      setLastPrice(Number(val))
+      try { console.debug('[lastPrice] set', { val: Number(val), src, srcSym, cur, ts: new Date().toISOString() }) } catch (e) {}
+    } catch (e) {}
+  }
   // attempt an initial REST load once, then open WS for realtime deltas
   const [initialLoaded, setInitialLoaded] = useState(false)
   // Cloudflare Worker에서 계정/포지션 정보 fetch (최초 1회 + 10초마다)
@@ -186,6 +212,46 @@ export default function App() {
     const interval = setInterval(fetchAccountAndPositions, 10000);
     return () => { mounted = false; clearInterval(interval); };
   }, []);
+
+  // Prefetch full symbols list on app load so the picker is always populated
+  useEffect(() => {
+    let mounted = true;
+    const prefetch = async () => {
+      await loadSymbols();
+    };
+    prefetch();
+    return () => { mounted = false };
+  }, []);
+
+  // fetch full symbol list from server when the picker opens
+  useEffect(() => {
+    let mounted = true;
+    if (showSymbolList) {
+      // always refresh symbols when opening picker to ensure full list
+      loadSymbols();
+    }
+    return () => { mounted = false };
+  }, [showSymbolList]);
+
+  // loadSymbols: reusable fetch function to populate symbolsList
+  async function loadSymbols() {
+    try {
+      setSymbolsLoading(true);
+      const res = await fetch('/symbols?quote=USDT&contractType=PERPETUAL&status=TRADING');
+      if (!res || !res.ok) {
+        return;
+      }
+      const data = await res.json();
+      const raw = Array.isArray(data && data.symbols) ? data.symbols : (Array.isArray(data) ? data : []);
+      const arr = raw.map(s => (typeof s === 'string' ? { symbol: s } : { ...s, symbol: String(s.symbol).toUpperCase() }));
+      arr.sort((a, b) => String(a.symbol).localeCompare(String(b.symbol)));
+      setSymbolsList(arr);
+    } catch (e) {
+      console.warn('loadSymbols error', e);
+    } finally {
+      setSymbolsLoading(false);
+    }
+  }
   const BINANCE_WS = 'wss://stream.binance.com:9443/ws/btcusdt@trade'
   // App no longer opens a dedicated trade websocket; SmallEMAChart will provide live trade
   // callbacks via the `onTrade` prop so we can update `lastPrice`.
@@ -245,11 +311,19 @@ export default function App() {
           if (msg.type === 'pos_delta') {
             const pos = msg.position || msg.pos || msg.data || msg
             if (!pos || !pos.symbol) return
-            // 항상 pos_delta의 markPrice를 lastPrice로 반영 (실시간 가격 동기화)
-            if (typeof pos.markPrice !== 'undefined' && pos.markPrice !== null) {
-              setLastPrice(Number(pos.markPrice))
-            } else if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null) {
-              setLastPrice(Number(msg.markPrice))
+            // Only update lastPrice when the delta is for the currently selected symbol
+            try {
+              const posSym = normalizeSym(pos.symbol)
+              const curSym = normalizeSym(symbol)
+              if (posSym === curSym) {
+                if (typeof pos.markPrice !== 'undefined' && pos.markPrice !== null) {
+                  updateLastPrice(pos.markPrice, 'pos_delta', pos.symbol)
+                } else if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null) {
+                  updateLastPrice(msg.markPrice, 'pos_delta', pos.symbol)
+                }
+              }
+            } catch (e) {
+              // ignore
             }
             setAccount(prev => {
               const acc = prev ? { ...prev } : { positions: [] }
@@ -276,8 +350,12 @@ export default function App() {
           } else if (msg.type === 'acct_delta') {
             const totals = msg.totals || msg.data || {}
             // if acct_delta carries a markPrice for our symbol, update lastPrice
-            if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null) {
-              try { setLastPrice(Number(msg.markPrice)) } catch (e) {}
+            if (typeof msg.markPrice !== 'undefined' && msg.markPrice !== null && msg.symbol) {
+              try {
+                if (normalizeSym(msg.symbol) === normalizeSym(symbol)) {
+                  updateLastPrice(msg.markPrice, 'acct_delta', msg.symbol)
+                }
+              } catch (e) {}
             }
             setAccount(prev => {
               const acc = prev ? { ...prev } : { positions: [] }
@@ -291,7 +369,20 @@ export default function App() {
           } else if (msg.type === 'snapshot' || msg.type === 'full_snapshot' || msg.type === 'account_snapshot') {
             // server may send full snapshot occasionally
             const snap = msg.snapshot || msg.data || msg.account
-            if (snap) setAccount(snap)
+            if (snap) {
+              setAccount(snap)
+              try {
+                // if snapshot contains a position for current symbol, seed lastPrice from it
+                const posArr = Array.isArray(snap.positions) ? snap.positions : (Array.isArray(snap) ? snap : [])
+                const cur = normalizeSym(symbol)
+                const found = posArr.find(p => p && normalizeSym(p.symbol) === cur)
+                if (found && (typeof found.markPrice !== 'undefined' && found.markPrice !== null)) {
+                  updateLastPrice(found.markPrice, 'snapshot', found.symbol)
+                } else if (found && (typeof found.indexPrice !== 'undefined' && found.indexPrice !== null)) {
+                  updateLastPrice(found.indexPrice, 'snapshot', found.symbol)
+                }
+              } catch (e) {}
+            }
           }
         } catch (e) {
           // ignore parse errors
@@ -371,13 +462,63 @@ export default function App() {
             <div style={{marginTop: 8}}>
               <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
                 <label style={{fontSize:13,color:'var(--muted)'}}>Symbol:</label>
-                <input className="theme-input" type="text" value={symbolStr} onChange={e=>setSymbolStr(e.target.value)} onBlur={() => { const s = (symbolStr||'BTCUSDT').trim().toUpperCase(); setSymbolStr(s); try{ localStorage.setItem('symbol', s) } catch(e){} }} style={{width:120,padding:6,borderRadius:6}} />
+                <div style={{position:'relative'}}>
+                  <div role="button" tabIndex={0} onClick={async () => { setShowSymbolList(true); setSymbolFilter(''); if (!symbolsLoading) await loadSymbols(); }} onKeyDown={async (e)=>{ if(e.key==='Enter'){ setShowSymbolList(true); setSymbolFilter(''); if (!symbolsLoading) await loadSymbols(); } }} className="theme-input" style={{width:120,padding:6,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}}>
+                    <span>{(symbolStr||'BTCUSDT').toUpperCase()}</span>
+                    <span style={{opacity:0.8,fontSize:12}}>{showSymbolList ? '▴' : '▾'}</span>
+                  </div>
+                  {showSymbolList && (
+                    <div className="symbol-picker" style={{position:'absolute',right:0,top:'42px',zIndex:60}}>
+                      <div style={{padding:8,display:'flex',gap:8}}>
+                        <input className="theme-input" placeholder="Filter" value={symbolFilter} onChange={e=>setSymbolFilter(e.target.value.toUpperCase())} style={{width:180}} />
+                      </div>
+                      <div style={{maxHeight:'72vh',overflow:'auto'}}>
+                          {(() => {
+                            const fallback = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','SOLUSDT','ADAUSDT','DOTUSDT','LTCUSDT','LINKUSDT','TRXUSDT'];
+                            const opts = (Array.isArray(symbolsList) && symbolsList.length) ? symbolsList.map(s => String(s.symbol).toUpperCase()) : fallback;
+                            const filtered = opts.filter(s => s.includes(symbolFilter || ''))
+                            if (symbolsLoading) return (<div style={{padding:10,color:'var(--muted)'}}>Loading symbols…</div>)
+                            if (!filtered.length) return (<div style={{padding:10,color:'var(--muted)'}}>No symbols</div>)
+                            return filtered.map(s => (
+                              <div key={s} onClick={() => { const val = String(s||'BTCUSDT').toUpperCase(); setSymbolStr(val); try{ localStorage.setItem('symbol', val) }catch{}; setShowSymbolList(false); updateLastPrice(null,'select', val); }} style={{padding:'8px 10px',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,0.02)'}}>
+                                {s}
+                              </div>
+                            ))
+                          })()}
+                      </div>
+                    </div>
+                  )}
+                {/* debug badge removed */}
+                </div>
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA1:</label>
                 <input className="theme-input" type="number" min={1} value={emaShortStr} onChange={e=>setEmaShortStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(emaShortStr,10) || 26)); setEmaShortStr(v); try{ localStorage.setItem('emaShort', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
                 <label style={{fontSize:13,color:'var(--muted)'}}>EMA2:</label>
                 <input className="theme-input" type="number" min={1} value={emaLongStr} onChange={e=>setEmaLongStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(emaLongStr,10) || 200)); setEmaLongStr(v); try{ localStorage.setItem('emaLong', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
-                <label style={{fontSize:13,color:'var(--muted)'}}>Minutes:</label>
-                <input className="theme-input" type="number" min={1} value={minutesStr} onChange={e=>setMinutesStr(e.target.value)} onBlur={() => { const v = String(Math.max(1, parseInt(minutesStr,10) || 1)); setMinutesStr(v); try{ localStorage.setItem('minutes', v) } catch(e){} }} style={{width:72,padding:6,borderRadius:6}} />
+                <label style={{fontSize:13,color:'var(--muted)'}}>Interval:</label>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  {(() => {
+                    const opts = [
+                      { label: '1', value: '1' },
+                      { label: '5', value: '5' },
+                      { label: '30', value: '30' },
+                      { label: '4H', value: '240' },
+                      { label: '1D', value: '1440' },
+                      { label: '1W', value: '10080' }
+                    ];
+                    return opts.map(o => {
+                      const isActive = minutesStr === String(o.value)
+                      return (
+                        <button
+                          key={o.value}
+                          onClick={() => { const v = String(o.value); setMinutesStr(v); try { localStorage.setItem('minutes', v) } catch (e) {} }}
+                          className={"interval-btn" + (isActive ? ' active' : '')}
+                        >
+                          {o.label}
+                        </button>
+                      )
+                    })
+                  })()}
+                </div>
               </div>
               <ChartToggle
                 onCross={(c) => {
@@ -403,7 +544,7 @@ export default function App() {
                     setOrders(prev => { const next = [orderEntry, ...prev].slice(0, 200); try{ localStorage.setItem('orders', JSON.stringify(next)) }catch{}; return next })
                   } catch (e) {}
                 }}
-                onPrice={setLastPrice}
+                onPrice={(p) => updateLastPrice(p, 'chart', symbol)}
                 emaShort={emaShort}
                 emaLong={emaLong}
                 minutes={minutes}
@@ -577,6 +718,8 @@ export default function App() {
           </div>
         </aside>
       </main>
+      {/* Full-screen modal to show entire symbol list for easy selection */}
+      {/* full-screen modal removed per request; picker itself now expands to viewport height */}
     </div>
   )
 }

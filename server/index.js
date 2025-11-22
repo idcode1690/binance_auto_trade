@@ -39,6 +39,8 @@ const binance = new Binance().options({
 let accountInfo = { totalWalletBalance: 0, displayTotalWalletBalance: 0, totalUnrealizedProfit: 0, totalMarginBalance: 0, positions: [] };
 // previous snapshot used to compute deltas to broadcast over WS
 let prevAccountSnapshot = null;
+// store last raw Binance REST/futuresAccount response for debugging
+let lastRawAccount = null;
 
 // helper to broadcast a JSON message to all connected ws clients
 function broadcastMessage(msg) {
@@ -60,6 +62,8 @@ async function updateAccountInfo() {
 	try {
 		// 선물 계정 정보
 		const acc = await binance.futuresAccount();
+		// keep a raw copy for debugging/comparison
+		try { lastRawAccount = JSON.parse(JSON.stringify(acc)); } catch (e) { lastRawAccount = acc }
 		// keep numeric conversions and add a few friendly fields the client may expect
 		const next = {};
 		next.totalWalletBalance = Number(acc.totalWalletBalance) || 0;
@@ -430,8 +434,101 @@ app.get('/account', (req, res) => {
 	res.json(accountInfo);
 });
 
+// Debug endpoint: return last raw Binance response and normalized snapshot
+app.get('/debug/raw_account', (req, res) => {
+    res.json({ raw: lastRawAccount, normalized: accountInfo, prev: prevAccountSnapshot });
+});
+
 app.get('/positions', (req, res) => {
 	res.json(accountInfo.positions);
+});
+
+// Cached symbols endpoint: return Binance futures exchange info symbols (cached for 5 minutes)
+let cachedSymbols = null;
+let cachedSymbolsTs = 0;
+async function fetchSymbolsFromBinance() {
+	try {
+		// futures exchange info
+		// We'll fetch both futures and spot exchangeInfo and merge them to provide a more complete symbol list
+		const futuresUrl = 'https://fapi.binance.com/fapi/v1/exchangeInfo';
+		const spotUrl = 'https://api.binance.com/api/v3/exchangeInfo';
+		const [fRes, sRes] = await Promise.allSettled([
+			axios.get(futuresUrl, { timeout: 10000 }),
+			axios.get(spotUrl, { timeout: 10000 })
+		]);
+
+		const symbols = [];
+		if (fRes.status === 'fulfilled' && fRes.value && fRes.value.data && Array.isArray(fRes.value.data.symbols)) {
+			for (const s of fRes.value.data.symbols) {
+				symbols.push({
+					symbol: s.symbol,
+					status: s.status,
+					baseAsset: s.baseAsset,
+					quoteAsset: s.quoteAsset,
+					contractType: s.contractType || null,
+					deliveryDate: s.deliveryDate || null,
+					source: 'futures'
+				});
+			}
+		}
+		if (sRes.status === 'fulfilled' && sRes.value && sRes.value.data && Array.isArray(sRes.value.data.symbols)) {
+			for (const s of sRes.value.data.symbols) {
+				symbols.push({
+					symbol: s.symbol,
+					status: s.status,
+					baseAsset: s.baseAsset,
+					quoteAsset: s.quoteAsset,
+					contractType: null,
+					deliveryDate: null,
+					source: 'spot'
+				});
+			}
+		}
+
+		// dedupe by symbol (prefer futures version if present)
+		const map = new Map();
+		for (const s of symbols) {
+			const key = String(s.symbol || '').toUpperCase();
+			if (!map.has(key)) map.set(key, s);
+			else {
+				// prefer futures entry over spot for same symbol
+				const existing = map.get(key);
+				if (existing && existing.source !== 'futures' && s.source === 'futures') map.set(key, s);
+			}
+		}
+		const arr = Array.from(map.values());
+		return arr;
+	} catch (e) {
+		console.warn('fetchSymbolsFromBinance failed', e && e.response ? e.response.data : e.message || e);
+	}
+	return null;
+}
+
+app.get('/symbols', async (req, res) => {
+	try { console.log(`/symbols requested from ${req.ip} ua=${req.headers['user-agent'] || ''} q=${JSON.stringify(req.query)}`) } catch(e){}
+	try {
+		const now = Date.now();
+		// refresh cached full list every 5 minutes
+		if (!cachedSymbols || (now - cachedSymbolsTs) >= (5 * 60 * 1000)) {
+			const list = await fetchSymbolsFromBinance();
+			if (list && Array.isArray(list)) {
+				cachedSymbols = list;
+				cachedSymbolsTs = Date.now();
+			}
+		}
+
+		// support optional query filters: quote (e.g., USDT), contractType (e.g., PERPETUAL), status
+		const { quote, contractType, status } = req.query || {};
+		let out = Array.isArray(cachedSymbols) ? cachedSymbols.slice() : [];
+		if (quote) out = out.filter(s => String(s.quoteAsset || '').toUpperCase() === String(quote).toUpperCase());
+		if (contractType) out = out.filter(s => String(s.contractType || '').toUpperCase() === String(contractType).toUpperCase());
+		if (status) out = out.filter(s => String(s.status || '').toUpperCase() === String(status).toUpperCase());
+
+		return res.json({ source: 'cached', count: out.length, symbols: out });
+	} catch (e) {
+		console.error('GET /symbols error', e && e.stack ? e.stack : e);
+		res.status(500).json({ error: 'failed to fetch symbols' });
+	}
 });
 
 // Provide a simple HTTP health endpoint
